@@ -50,6 +50,14 @@ The script keeps manifests keyed by URL + SHA256 to avoid re-downloading files a
 
 DuckDB keeps historical tables hot locally, so traders can query spreads, scarcity adders, and contextual drivers from a single file-backed database.
 
+## Effective PTDF estimation
+
+1. Materialize constraint and target features: `julia scripts/apply_views.jl`
+2. Fit elastic-net sensitivities and persist outputs: `julia scripts/fit_effective_ptdfs.jl`
+3. Optional: schedule the fitter after nightly ingestion to refresh `ref.estimated_ptdf*` tables.
+
+The fitter persists constraint/node coefficients (`ref.estimated_ptdf`), node intercepts, constraint rebasing offsets, and run metadata (window, RMSE/MAE, active constraints). Downstream analytics can pull these tables for DAG pricing or validation dashboards.
+
 ## GPU-aware state assimilation prototype
 
 The `src/` directory now contains a small SciML-based prototype that can run on CPU or GPU:

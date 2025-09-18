@@ -8,6 +8,7 @@ include(joinpath(@__DIR__, "../src/ERCOTPipeline.jl"))
 using .ERCOTPipeline
 using LinearAlgebra
 using Statistics
+using Dates
 
 function main()
     device = detect_device()
@@ -27,6 +28,32 @@ function main()
 
     @info "Observation" observation
     @info "Posterior mean" posterior_mean
+
+    graph = EventGraph()
+    interval = (now(), now() + Minute(5))
+    add_event!(graph, EventNode(:load_above_equilibrium;
+                                scope = (variable = :load,
+                                         relation = :gt,
+                                         threshold = model.params.equilibrium[1],
+                                         interval = interval,
+                                         product = :rt_energy)))
+    add_event!(graph, EventNode(:wind_below_equilibrium;
+                                scope = (variable = :wind,
+                                         relation = :lt,
+                                         threshold = model.params.equilibrium[2],
+                                         interval = interval,
+                                         product = :rt_energy)))
+    add_event!(graph, EventNode(:scarcity_combo;
+                                parents = [:load_above_equilibrium, :wind_below_equilibrium],
+                                scope = (aggregator = :all_true,
+                                         product = :rt_energy,
+                                         tags = [:scarcity])))
+
+    event_priors = ensemble_event_priors(model, X_post, graph)
+    @info "Event priors" event_priors
+
+    market = initialize_market(event_priors; b = 5.0)
+    @info "LMSR prices" state_prices(market)
 end
 
 main()
