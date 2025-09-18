@@ -49,3 +49,19 @@ The script keeps manifests keyed by URL + SHA256 to avoid re-downloading files a
 * Extend the config with additional EMIL IDs by appending new objects to `datasets.json`.
 
 DuckDB keeps historical tables hot locally, so traders can query spreads, scarcity adders, and contextual drivers from a single file-backed database.
+
+## GPU-aware state assimilation prototype
+
+The `src/` directory now contains a small SciML-based prototype that can run on CPU or GPU:
+
+- `Device.jl` detects whether CUDA (NVIDIA), ROCm (AMD), or Metal (macOS) is available at runtime and returns `CPUDevice` or `GPUDevice` wrappers accordingly. All state vectors and noise draws adapt through this abstraction.
+- `AssimilationModel.jl` defines a simple RTC+B-inspired state ODE (load, wind, solar, thermal outages) and exposes `build_rtc_state_model`, `simulate_ensemble`, and `ensemble_matrix`. When a GPU is present the ODE integrates on CuArrays automatically.
+- `EnKF.jl` provides a lightweight Ensemble Kalman Filter update that fuses an observation vector into the ensemble forecast.
+
+Try it end-to-end:
+
+```
+julia scripts/run_assimilation.jl
+```
+
+The script activates the project, detects the device, simulates an ensemble, performs a synthetic EnKF update, and prints both the observation and posterior state mean. This scaffold will be extended with the PTDF learner, LMSR market layer, and RL control policy outlined in `docs/rtc_bayesian_market.md`.

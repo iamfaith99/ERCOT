@@ -1,8 +1,6 @@
 module AssimilationModel
 
 using LinearAlgebra
-using SciMLBase
-using OrdinaryDiffEq
 using Random
 
 import ..Device: AbstractExecutionDevice, CPUDevice, GPUDevice, to_device_array, detect_device
@@ -17,9 +15,8 @@ struct RTCParameters
     process_scale::Vector{Float64}
 end
 
-struct RTCStateModel{Tprob,Tparams}
+struct RTCStateModel{Tparams}
     device::AbstractExecutionDevice
-    prob::Tprob
     params::Tparams
     dt_seconds::Float64
     labels::NTuple{4,Symbol}
@@ -41,17 +38,8 @@ function _rtc_rhs!(du, u, p::RTCParameters, t)
     return nothing
 end
 
-function _device_noise(device::AbstractExecutionDevice, params::RTCParameters)
-    vec = to_device_array(device, params.process_scale)
-    return vec
-end
-
 function build_rtc_state_model(device::AbstractExecutionDevice=detect_device(); Δt = 300.0, params = _default_parameters(), labels = default_state_labels)
-    u0_cpu = _initial_state(params)
-    u0_dev = to_device_array(device, u0_cpu)
-    rhs! = (du,u,p,t) -> _rtc_rhs!(du,u,p,t)
-    prob = ODEProblem(rhs!, u0_dev, (0.0, Δt), params)
-    RTCStateModel(device, prob, params, Δt, labels)
+    RTCStateModel{RTCParameters}(device, params, Δt, labels)
 end
 
 function _sample_noise(device::CPUDevice, rng::AbstractRNG, scale::AbstractVector)
@@ -60,25 +48,31 @@ end
 
 function _sample_noise(device::GPUDevice, rng::AbstractRNG, scale::AbstractVector)
     length(scale) == 0 && return scale
-    CUDA = Base.require(Base.PkgId(Base.UUID("052768ef-5323-5732-b1bb-66c8b64840ba"), "CUDA"))
-    noise = CUDA.randn(eltype(scale), length(scale))
-    return noise .* scale
+    noise_cpu = randn(rng, length(scale))
+    noise_dev = to_device_array(device, noise_cpu)
+    scale_dev = to_device_array(device, scale)
+    return noise_dev .* scale_dev
 end
 
-function simulate_ensemble(model::RTCStateModel; ensemble_size = 32, dt = nothing, rng = Random.default_rng())
-    integrator = Tsit5()
-    horizon = isnothing(dt) ? model.dt_seconds : dt
-    noise_scale = _device_noise(model.device, model.params)
+function simulate_ensemble(model::RTCStateModel; ensemble_size = 32, dt = model.dt_seconds, steps = 1, rng = Random.default_rng())
+    state_dim = length(model.params.equilibrium)
+    equilibrium = to_device_array(model.device, copy(model.params.equilibrium))
+    scale = model.params.process_scale
+    X = Matrix{Float64}(undef, state_dim, ensemble_size)
 
-    function prob_func(prob, i, repeat)
-        perturbation = _sample_noise(model.device, rng, noise_scale)
-        u0 = prob.u0 .+ perturbation
-        remake(prob, u0 = u0)
+    for j in 1:ensemble_size
+        u = copy(equilibrium)
+        perturbation = _sample_noise(model.device, rng, scale)
+        u .+= perturbation
+        for _ in 1:steps
+            du = similar(u)
+            _rtc_rhs!(du, u, model.params, 0.0)
+            u .+= dt .* du
+        end
+        X[:, j] = Array(u)
     end
 
-    ensemble_prob = EnsembleProblem(model.prob; prob_func)
-    sol = solve(ensemble_prob, integrator; trajectories = ensemble_size, saveat = horizon)
-    return sol
+    return X
 end
 
 end
