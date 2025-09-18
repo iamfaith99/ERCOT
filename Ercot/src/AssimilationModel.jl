@@ -61,6 +61,24 @@ function build_rtc_state_model(device::AbstractExecutionDevice = detect_device()
     return RTCStateModel(device, params, params_device, Δt, labels, base_problem)
 end
 
+function build_rtc_state_model(labels::AbstractVector{Symbol};
+                               device::AbstractExecutionDevice = detect_device(),
+                               Δt::Real = 300.0,
+                               equilibrium::AbstractVector{<:Real} = fill(0.0, length(labels)),
+                               decay_rates::AbstractVector{<:Real} = fill(0.10, length(labels)),
+                               process_scale::AbstractVector{<:Real} = fill(100.0, length(labels)))
+    n = length(labels)
+    length(equilibrium) == n || error("equilibrium length must match labels")
+    length(decay_rates) == n || error("decay_rates length must match labels")
+    length(process_scale) == n || error("process_scale length must match labels")
+    params = RTCParameters(collect(Float64.(equilibrium)), collect(Float64.(decay_rates)), collect(Float64.(process_scale)))
+    params_device = _device_parameters(device, params)
+    u0 = copy(params_device.equilibrium)
+    tspan = (0.0, Float64(Δt))
+    base_problem = ODEProblem(_rtc_rhs!, u0, tspan, params_device)
+    return RTCStateModel(device, params, params_device, Float64(Δt), Tuple(labels), base_problem)
+end
+
 function _sample_noise(device::CPUDevice, rng::AbstractRNG, scale::AbstractVector)
     return scale .* randn(rng, length(scale))
 end

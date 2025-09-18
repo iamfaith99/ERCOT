@@ -6,6 +6,7 @@ const DBPATH = joinpath(@__DIR__, "..", "data", "duckdb", "ercot.duckdb")
 const SQL_FILES = [
     joinpath(@__DIR__, "..", "sql", "create_views.sql"),
     joinpath(@__DIR__, "..", "sql", "effective_ptdf.sql"),
+    joinpath(@__DIR__, "..", "sql", "calibration.sql"),
 ]
 
 function _quote_literal(s::AbstractString)

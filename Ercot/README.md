@@ -69,6 +69,11 @@ Only fits whose RMSE beats the no-μ baseline by at least 5% promote from stagin
 
 Run `julia scripts/run_ptdf_scenario.jl` to grab the most recent μ snapshot, apply the estimated PTDFs, emit DAG events (node > 25 $/MWh, constraint contribution shares), and quote them with the LMSR helpers. This gives a quick “what-if” view of constraint forecasts inside the market-of-models stack.
 
+### PTDF REST service & trading loop
+
+- Start the lightweight JSON service: `julia scripts/ptdf_service.jl` (configurable via `PTDF_SERVICE_PORT`/`PTDF_SERVICE_HOST`). Call `GET /scenario?nodes=HB_WEST,HB_HOUSTON&topk=3` to receive predicted prices, top drivers, and LMSR event prices.
+- Drive a 5-minute trading loop prototype: `julia scripts/trading_loop.jl`. The loop checks model freshness/improvement, skips stale ticks, computes basis signals for configured nodes/hub, sizes via simple scenario shocks, and logs trade suggestions (no execution).
+
 ## GPU-aware state assimilation prototype
 
 The `src/` directory now contains a small SciML-based prototype that can run on CPU or GPU:

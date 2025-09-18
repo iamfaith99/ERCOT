@@ -273,3 +273,75 @@ SELECT
     BusName AS bus_name,
     LMP AS dam_lmp
 FROM market.dam_hourly_lmps;
+
+CREATE SCHEMA IF NOT EXISTS dashboard;
+
+CREATE OR REPLACE VIEW dashboard.node_driver_live AS
+WITH latest AS (
+    SELECT *
+    FROM features.sced_mu
+    ORDER BY sced_ts_utc DESC
+    LIMIT 1
+),
+meta AS (
+    SELECT sced_ts_utc, sced_ts_utc_minute
+    FROM latest
+),
+mu_values AS (
+    SELECT
+        key AS constraint_name,
+        TRY_CAST(value AS DOUBLE) AS mu_value
+    FROM latest, LATERAL json_each(to_json(latest))
+    WHERE key NOT IN ('sced_ts_utc', 'sced_ts_utc_minute')
+),
+base AS (
+    SELECT
+        ntc.node,
+        ntc.constraint_name,
+        ntc.rank_for_node,
+        ntc.beta,
+        ntc.avg_abs_mu,
+        ntc.avg_abs_contrib,
+        COALESCE(mu.mu_value, 0.0) AS current_mu,
+        ntc.beta * COALESCE(mu.mu_value, 0.0) AS live_contribution,
+        abs(ntc.beta * COALESCE(mu.mu_value, 0.0)) AS abs_live_contribution,
+        meta.sced_ts_utc,
+        meta.sced_ts_utc_minute
+    FROM ref.node_top_constraints ntc
+    LEFT JOIN mu_values mu USING (constraint_name)
+    CROSS JOIN meta
+),
+ranked AS (
+    SELECT
+        base.*,
+        ROW_NUMBER() OVER (PARTITION BY node ORDER BY abs_live_contribution DESC, constraint_name) AS live_rank,
+        SUM(abs_live_contribution) OVER (PARTITION BY node) AS total_abs_live_contribution
+    FROM base
+)
+SELECT
+    node,
+    constraint_name,
+    rank_for_node,
+    live_rank,
+    beta,
+    current_mu,
+    live_contribution,
+    abs_live_contribution,
+    total_abs_live_contribution,
+    CASE
+        WHEN total_abs_live_contribution > 0 THEN abs_live_contribution / total_abs_live_contribution
+        ELSE NULL
+    END AS live_share,
+    CASE
+        WHEN current_mu > 0 THEN 'positive'
+        WHEN current_mu < 0 THEN 'negative'
+        WHEN current_mu = 0 THEN 'flat'
+        ELSE 'missing'
+    END AS mu_direction,
+    avg_abs_mu,
+    avg_abs_contrib,
+    sced_ts_utc,
+    sced_ts_utc_minute
+FROM ranked
+WHERE live_rank <= 10
+ORDER BY node, live_rank;
