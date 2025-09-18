@@ -350,14 +350,84 @@
     "notes": "Day-Ahead total energy sold."
   },
   {
+    "name": "dam_mcpc_trials",
+    "group": "trials",
+    "emil_id": "NP4-188-RTCMT",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP4-188-RTCMT",
+    "file_regex": "(?i).*np4[-_]?188.*_csv\\.zip$",
+    "dest_table": "trial.dam_mcpc",
+    "notes": "Day-Ahead MCPC by ancillary service type for RTC Market Trials."
+  },
+  {
     "name": "dam_hourly_lmps_trials",
     "group": "trials",
     "emil_id": "NP4-183-RTCMT",
     "mode": "index",
     "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP4-183-RTCMT",
-    "file_regex": "(?i).*(\\.zip|\\.csv(\\.gz)?)$",
+    "file_regex": "(?i).*np4[-_]?183.*_csv\\.zip$",
     "dest_table": "trial.dam_hourly_lmps",
-    "notes": "Market Trials DAM hourly LMPs."
+    "notes": "Bus-level DAM nodal LMPs for RTC Market Trials."
+  },
+  {
+    "name": "dam_settlement_point_prices_trials",
+    "group": "trials",
+    "emil_id": "NP4-190-RTCMT",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP4-190-RTCMT",
+    "file_regex": "(?i).*np4[-_]?190.*_csv\\.zip$",
+    "dest_table": "trial.dam_settlement_point_prices",
+    "notes": "Market Trials DASPPs for hubs, zones, and resource nodes."
+  },
+  {
+    "name": "dam_shadow_prices_trials",
+    "group": "trials",
+    "emil_id": "NP4-191-RTCMT",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP4-191-RTCMT",
+    "file_regex": "(?i).*np4[-_]?191.*_csv\\.zip$",
+    "dest_table": "trial.dam_shadow_prices",
+    "notes": "Market Trials DAM binding constraints and shadow prices."
+  },
+  {
+    "name": "as_demand_curves_trials",
+    "group": "trials",
+    "emil_id": "NP4-212-CD",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP4-212-CD",
+    "file_regex": "(?i).*np4[-_]?212.*_csv\\.zip$",
+    "dest_table": "trial.as_demand_curves",
+    "notes": "Market Trials DAM and SCED ancillary service demand curves (ASDCs)."
+  },
+  {
+    "name": "dam_total_as_sold_trials",
+    "group": "trials",
+    "emil_id": "NP4-532-CD",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP4-532-CD",
+    "file_regex": "(?i).*np4[-_]?532.*_csv\\.zip$",
+    "dest_table": "trial.dam_total_as_sold",
+    "notes": "Totals of ancillary services awarded in the Market Trials DAM."
+  },
+  {
+    "name": "daily_ruc_as_deployment_trials",
+    "group": "trials",
+    "emil_id": "NP5-527-CD",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP5-527-CD",
+    "file_regex": "(?i).*np5[-_]?527.*_csv\\.zip$",
+    "dest_table": "trial.daily_ruc_as_deployment_factors",
+    "notes": "Daily RUC ancillary service deployment factors for Market Trials."
+  },
+  {
+    "name": "projected_as_deployment_trials",
+    "group": "trials",
+    "emil_id": "NP5-526-CD",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP5-526-CD",
+    "file_regex": "(?i).*np5[-_]?526.*_csv\\.zip$",
+    "dest_table": "trial.projected_as_deployment_factors",
+    "notes": "Projected ancillary service deployment factors for DRUC/HRUC Market Trials."
   },
   {
     "name": "rt_lmp_trials",
@@ -365,8 +435,118 @@
     "emil_id": "NP6-788-RTCMT",
     "mode": "index",
     "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP6-788-RTCMT",
-    "file_regex": "(?i).*(\\.zip|\\.csv(\\.gz)?)$",
+    "file_regex": "(?i).*np6[-_]?788.*_csv\\.zip$",
     "dest_table": "trial.rt_lmp_5min",
-    "notes": "Market Trials Real-Time LMPs by node, load zone, hub."
+    "notes": "5-minute Market Trials real-time LMPs by node, load zone, and hub."
+  },
+  {
+    "name": "rt_settlement_point_prices_trials",
+    "group": "trials",
+    "emil_id": "NP6-905-RTCMT",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP6-905-RTCMT",
+    "file_regex": "(?i).*np6[-_]?905.*_csv\\.zip$",
+    "dest_table": "trial.rt_settlement_point_prices",
+    "notes": "Market Trials real-time settlement point prices at nodes, hubs, and zones."
+  },
+  {
+    "name": "rtd_indicative_lmps_trials",
+    "group": "trials",
+    "emil_id": "NP6-970-RTCMT",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP6-970-RTCMT",
+    "file_regex": "(?i).*np6[-_]?970.*_csv\\.zip$",
+    "dest_table": "trial.rtd_indicative_lmps",
+    "notes": "Market Trials RTD look-ahead LMPs by node, zone, and hub."
+  },
+  {
+    "name": "rtd_indicative_adders_trials",
+    "group": "trials",
+    "emil_id": "NP6-325-RTCMT",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP6-325-RTCMT",
+    "file_regex": "(?i).*np6[-_]?325.*_csv\\.zip$",
+    "dest_table": "trial.rtd_indicative_adders",
+    "notes": "Market Trials RTD indicative reliability price adders (energy and AS)."
+  },
+  {
+    "name": "rt_price_adders_sced_trials",
+    "group": "trials",
+    "emil_id": "NP6-323-RTCMT",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP6-323-RTCMT",
+    "file_regex": "(?i).*np6[-_]?323.*_csv\\.zip$",
+    "dest_table": "trial.rt_price_adders_sced",
+    "notes": "Market Trials realized 5-minute price adders (energy and ancillary services)."
+  },
+  {
+    "name": "rt_binding_constraints_trials",
+    "group": "trials",
+    "emil_id": "NP6-86-RTCMT",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP6-86-RTCMT",
+    "file_regex": "(?i).*np6[-_]?86.*_csv\\.zip$",
+    "dest_table": "trial.rt_binding_constraints",
+    "notes": "Market Trials SCED binding transmission constraints and shadow prices."
+  },
+  {
+    "name": "rtd_mcpc_trials",
+    "group": "trials",
+    "emil_id": "NP6-329-CD",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP6-329-CD",
+    "file_regex": "(?i).*np6[-_]?329.*_csv\\.zip$",
+    "dest_table": "trial.rtd_mcpc",
+    "notes": "Market Trials RTD indicative MCPC values by ancillary service."
+  },
+  {
+    "name": "rt_mcpc_15min_trials",
+    "group": "trials",
+    "emil_id": "NP6-331-CD",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP6-331-CD",
+    "file_regex": "(?i).*np6[-_]?331.*_csv\\.zip$",
+    "dest_table": "trial.rt_mcpc_15min",
+    "notes": "Market Trials settlement-grade MCPC by 15-minute interval."
+  },
+  {
+    "name": "rt_mcpc_sced_trials",
+    "group": "trials",
+    "emil_id": "NP6-332-CD",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP6-332-CD",
+    "file_regex": "(?i).*np6[-_]?332.*_csv\\.zip$",
+    "dest_table": "trial.rt_mcpc_sced",
+    "notes": "Market Trials 5-minute MCPC for real-time scarcity tagging."
+  },
+  {
+    "name": "rt_total_as_capability_trials",
+    "group": "trials",
+    "emil_id": "NP6-328-CD",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP6-328-CD",
+    "file_regex": "(?i).*np6[-_]?328.*_csv\\.zip$",
+    "dest_table": "trial.rt_total_as_capability",
+    "notes": "Market Trials total ancillary service capability, including ESR limits."
+  },
+  {
+    "name": "hourly_ruc_as_deployment_trials",
+    "group": "trials",
+    "emil_id": "NP5-528-CD",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP5-528-CD",
+    "file_regex": "(?i).*np5[-_]?528.*_csv\\.zip$",
+    "dest_table": "trial.hourly_ruc_as_deployment_factors",
+    "notes": "Market Trials HRUC ancillary service deployment factors."
+  },
+  {
+    "name": "weekly_ruc_as_deployment_trials",
+    "group": "trials",
+    "emil_id": "NP5-525-CD",
+    "mode": "index",
+    "index_url": "https://www.ercot.com/mp/data-products/data-product-details?id=NP5-525-CD",
+    "file_regex": "(?i).*np5[-_]?525.*_csv\\.zip$",
+    "dest_table": "trial.weekly_ruc_as_deployment_factors",
+    "notes": "Market Trials WRUC ancillary service deployment factors."
   }
 ]

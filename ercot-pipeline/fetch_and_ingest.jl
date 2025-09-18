@@ -9,6 +9,13 @@ const STAGE  = joinpath(DATA, "staging")
 const META   = joinpath(DATA, "manifests")
 const DBPATH = joinpath(DATA, "duckdb", "ercot.duckdb")
 
+struct Options
+    config_path::String
+    datasets::Vector{String}
+    max_new::Union{Nothing,Int}
+    skip_db::Bool
+end
+
 mkpath.( [RAW, STAGE, META, dirname(DBPATH)] )
 
 # ---------- utilities ----------
@@ -48,6 +55,12 @@ function filename_from_url(url::String)
     if isempty(fname)
         fname = "download"
     end
+    if isempty(splitext(fname)[2])
+        params = URIs.queryparams(uri)
+        if haskey(params, "filename")
+            return String(params["filename"])
+        end
+    end
     if fname == "download" && !isempty(uri.query)
         sanitized = replace(uri.query, r"[^A-Za-z0-9._-]" => "_")
         fname = fname * "_" * sanitized
@@ -55,24 +68,35 @@ function filename_from_url(url::String)
     return fname
 end
 
-function unique_path(path::String)
-    if !isfile(path)
-        return path
-    end
-    base, ext = splitext(path)
-    counter = 1
-    while true
-        candidate = string(base, "_", counter, ext)
-        isfile(candidate) || return candidate
-        counter += 1
+function download_string(url::String)
+    temp = Downloads.download(url)
+    try
+        return read(temp, String)
+    finally
+        isfile(temp) && rm(temp; force=true)
     end
 end
 
-function download_file(url::String, rawdir::String)
+function download_file(url::String, rawdir::String; max_attempts::Int=3)
     mkpath(rawdir)
-    dest = unique_path(joinpath(rawdir, filename_from_url(url)))
-    Downloads.download(url, dest)
-    return dest
+    dest = joinpath(rawdir, filename_from_url(url))
+    temp = dest * ".tmp"
+    for attempt in 1:max_attempts
+        try
+            Downloads.download(url, temp)
+            mv(temp, dest; force=true)
+            return dest
+        catch err
+            isfile(temp) && rm(temp; force=true)
+            @warn "Download failed" url attempt error=err
+            if attempt == max_attempts
+                rethrow(err)
+            else
+                sleep(1.0)
+            end
+        end
+    end
+    error("unreachable")
 end
 
 function normalize_csv_extension(path::String)
@@ -86,12 +110,29 @@ function normalize_csv_extension(path::String)
     return path
 end
 
+function sanitize_csv!(path::String)
+    lower = lowercase(path)
+    endswith(lower, ".csv") || return
+    tmp = path * ".tmp"
+    open(path, "r") do src
+        open(tmp, "w") do dest
+            for line in eachline(src)
+                isempty(strip(line)) && continue
+                write(dest, line)
+                write(dest, '\n')
+            end
+        end
+    end
+    mv(tmp, path; force=true)
+end
+
 function extract_to_stage(raw_path::String, stagedir::String)
     mkpath(stagedir)
     staged = String[]
     lower = lowercase(raw_path)
     if endswith(lower, ".zip")
-        ZipFile.Reader(raw_path) do archive
+        archive = ZipFile.Reader(raw_path)
+        try
             for file in archive.files
                 name = file.name
                 endswith(name, "/") && continue
@@ -101,8 +142,11 @@ function extract_to_stage(raw_path::String, stagedir::String)
                     write(io, read(file))
                 end
                 dest = normalize_csv_extension(dest)
+                sanitize_csv!(dest)
                 push!(staged, dest)
             end
+        finally
+            close(archive)
         end
     elseif endswith(lower, ".gz") && !endswith(lower, ".tar.gz")
         dest = joinpath(stagedir, replace(basename(raw_path), r"\.gz$" => ""))
@@ -113,14 +157,32 @@ function extract_to_stage(raw_path::String, stagedir::String)
             end
         end
         dest = normalize_csv_extension(dest)
+        sanitize_csv!(dest)
         push!(staged, dest)
     else
         dest = joinpath(stagedir, basename(raw_path))
         cp(raw_path, dest; force=true)
         dest = normalize_csv_extension(dest)
+        sanitize_csv!(dest)
         push!(staged, dest)
     end
     return staged
+end
+
+function download_and_stage(dataset::String, url::String, rawdir::String, stagedir::String; max_attempts::Int=3)
+    for attempt in 1:max_attempts
+        rawfile = download_file(url, rawdir)
+        hash = sha256sum(rawfile)
+        try
+            staged = extract_to_stage(rawfile, stagedir)
+            return rawfile, staged, hash
+        catch err
+            @warn "Failed to extract archive, retrying" dataset url attempt error=err
+            isfile(rawfile) && rm(rawfile; force=true)
+            attempt == max_attempts && rethrow(err)
+        end
+    end
+    error("unreachable")
 end
 
 function staged_csvs(stagedir::String)
@@ -163,7 +225,11 @@ function ingest_csvs!(db::DuckDB.DB, table::String, stagedir::String)
     ensure_schema!(db, schema)
     pattern = joinpath(stagedir, "*.csv")
     full_table = isnothing(schema) ? quote_ident(name) : string(quote_ident(schema), ".", quote_ident(name))
-    DuckDB.execute(db, "CREATE OR REPLACE TABLE $full_table AS SELECT * FROM read_csv_auto(?, union_by_name=TRUE);", (pattern,))
+    DuckDB.execute(
+        db,
+        "CREATE OR REPLACE TABLE $full_table AS SELECT * FROM read_csv_auto(?, union_by_name=TRUE, sample_size=-1);",
+        (pattern,),
+    )
 end
 
 function absolute_href(base_url::String, href::String)
@@ -184,10 +250,86 @@ function absolute_href(base_url::String, href::String)
     return string(uri)
 end
 
+function extract_js_string(html::String, name::String)
+    pattern = Regex("var\\s+" * name * "\\s*=\\s*['\" ]([^'\";]+)")
+    m = match(pattern, html)
+    return m === nothing ? nothing : String(m.captures[1])
+end
+
+function documents_from_list(doc_list::Any)
+    docs = Dict{String,Any}[]
+    if doc_list isa Vector
+        for item in doc_list
+            if item isa Dict
+                if haskey(item, "Document") && item["Document"] isa Dict
+                    push!(docs, item["Document"])
+                elseif haskey(item, "ConstructedName")
+                    push!(docs, item)
+                end
+            end
+        end
+    elseif doc_list isa Dict
+        if haskey(doc_list, "Document")
+            doc = doc_list["Document"]
+            if doc isa Vector
+                for d in doc
+                    d isa Dict && push!(docs, d)
+                end
+            elseif doc isa Dict
+                push!(docs, doc)
+            end
+        else
+            push!(docs, doc_list)
+        end
+    end
+    return docs
+end
+
+function collect_misdoc_urls(html::String, pattern::Regex)
+    report_type = extract_js_string(html, "reportTypeID")
+    report_list = extract_js_string(html, "reportListUrl")
+    download_base = extract_js_string(html, "reportDownloadUrl")
+    if any(x -> x === nothing, (report_type, report_list, download_base))
+        return String[]
+    end
+
+    json_url = string(report_list, report_type)
+    response = try
+        download_string(json_url)
+    catch err
+        @warn "Failed to fetch report list" json_url error=err
+        return String[]
+    end
+
+    data = JSON3.read(response, Dict{String,Any})
+    docs_key = get(data, "ListDocsByRptTypeRes", Dict{String,Any}())
+    doc_list = get(docs_key, "DocumentList", Any[])
+    docs = documents_from_list(doc_list)
+
+    pattern_str = lowercase(string(pattern))
+    wants_xml = occursin("xml", pattern_str)
+
+    urls = String[]
+    for doc in docs
+        constructed = String(get(doc, "ConstructedName", get(doc, "FriendlyName", "")))
+        occursin(pattern, constructed) || continue
+        if !wants_xml && occursin("xml", lowercase(constructed))
+            continue
+        end
+        docid = get(doc, "DocID", nothing)
+        docid === nothing && continue
+        base_url = string(download_base, docid)
+        escaped_name = URIs.escapeuri(constructed)
+        sep = occursin('?', base_url) ? '&' : '?'
+        full_url = string(base_url, sep, "filename=", escaped_name)
+        push!(urls, full_url)
+    end
+
+    return unique(urls)
+end
+
 function collect_index_urls(index_url::String, pattern::Regex)
-    temp = Downloads.download(index_url)
-    html = read(temp, String)
-    rm(temp; force=true)
+    html = download_string(index_url)
     doc = parsehtml(html)
     urls = String[]
     for node in eachmatch(sel"a", doc.root)
@@ -198,7 +340,8 @@ function collect_index_urls(index_url::String, pattern::Regex)
         occursin(pattern, url) || continue
         push!(urls, url)
     end
-    return unique(urls)
+    isempty(urls) || return unique(urls)
+    return collect_misdoc_urls(html, pattern)
 end
 
 function dataset_urls(entry)
@@ -214,12 +357,59 @@ function dataset_urls(entry)
     end
 end
 
-function run_pipeline(config_path::String)
-    config = JSON3.read(read(config_path, String))
-    db = DuckDB.DB(DBPATH)
+function parse_args()
+    config_path = nothing
+    datasets = String[]
+    max_new = nothing
+    skip_db = false
+    i = 1
+    while i <= length(ARGS)
+        arg = ARGS[i]
+        if arg == "--config"
+            i += 1
+            i > length(ARGS) && error("--config requires a path")
+            config_path = ARGS[i]
+        elseif startswith(arg, "--config=")
+            config_path = String(split(arg, "=", limit=2)[2])
+        elseif arg == "--max-new"
+            i += 1
+            i > length(ARGS) && error("--max-new requires an integer value")
+            max_new = parse(Int, ARGS[i])
+        elseif startswith(arg, "--max-new=")
+            max_new = parse(Int, split(arg, "=", limit=2)[2])
+        elseif arg in ("--skip-db", "--download-only")
+            skip_db = true
+        elseif startswith(arg, "--")
+            error("Unknown flag $(arg)")
+        else
+            push!(datasets, String(arg))
+        end
+        i += 1
+    end
+    config_path = something(config_path, joinpath(ROOT, "config", "datasets.json"))
+    return Options(config_path, datasets, max_new, skip_db)
+end
+
+function should_process_dataset(name::String, opts::Options)
+    isempty(opts.datasets) && return true
+    return any(d -> d == name, opts.datasets)
+end
+
+function run_pipeline(opts::Options)
+    config = JSON3.read(read(opts.config_path, String))
+    db = nothing
+    if !opts.skip_db
+        try
+            db = DuckDB.DB(DBPATH)
+        catch err
+            @warn "Failed to open DuckDB; continuing without ingestion" error=err
+            opts = Options(opts.config_path, opts.datasets, opts.max_new, true)
+        end
+    end
     try
         for entry in config
             name = String(entry["name"])
+            should_process_dataset(name, opts) || continue
             dest_table = String(entry["dest_table"])
             rawdir = joinpath(RAW, name)
             stagedir = joinpath(STAGE, name)
@@ -229,7 +419,23 @@ function run_pipeline(config_path::String)
             manifest = load_manifest(name)
             files = manifest["files"]::Dict{String,Any}
 
+            cached = String[]
+            new_urls = String[]
             for url in urls
+                if haskey(files, url)
+                    push!(cached, url)
+                else
+                    push!(new_urls, url)
+                end
+            end
+
+            if opts.max_new !== nothing && length(new_urls) > opts.max_new
+                skipped = length(new_urls) - opts.max_new
+                @info "Limiting new downloads" name requested=length(new_urls) limit=opts.max_new skipped=skipped
+                new_urls = new_urls[1:opts.max_new]
+            end
+
+            for url in vcat(cached, new_urls)
                 if haskey(files, url)
                     info = files[url]
                     raw_exists = haskey(info, "raw") && isfile(String(info["raw"]))
@@ -243,9 +449,7 @@ function run_pipeline(config_path::String)
                 end
 
                 @info "Downloading" name url
-                rawfile = download_file(url, rawdir)
-                hash = sha256sum(rawfile)
-                staged = extract_to_stage(rawfile, stagedir)
+                rawfile, staged, hash = download_and_stage(name, url, rawdir, stagedir)
                 files[url] = Dict(
                     "raw" => rawfile,
                     "staged" => staged,
@@ -255,13 +459,17 @@ function run_pipeline(config_path::String)
             end
 
             save_manifest(name, manifest)
-            ingest_csvs!(db, dest_table, stagedir)
+            if db === nothing
+                @info "Skipping DuckDB ingest (download-only mode)" name stagedir
+            else
+                ingest_csvs!(db, dest_table, stagedir)
+            end
         end
     finally
-        close(db)
+        db === nothing || close(db)
     end
     @info "Done."
 end
 
-config_file = isempty(ARGS) ? joinpath(ROOT, "config", "datasets.json") : ARGS[1]
-run_pipeline(config_file)
+opts = parse_args()
+run_pipeline(opts)
