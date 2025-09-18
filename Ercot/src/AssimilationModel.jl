@@ -20,12 +20,12 @@ struct RTCParameters{Teq,Tdecay,Tscale}
     process_scale::Tscale
 end
 
-struct RTCStateModel{Tparams,Tdeviceparams,Tprob}
+struct RTCStateModel{Tparams,Tdeviceparams,Tprob,N}
     device::AbstractExecutionDevice
     params::Tparams
     device_params::Tdeviceparams
     dt_seconds::Float64
-    labels::NTuple{4,Symbol}
+    labels::NTuple{N,Symbol}
     base_problem::Tprob
 end
 

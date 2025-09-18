@@ -10,10 +10,6 @@ using Printf
 using Random
 using Statistics
 
-push!(LOAD_PATH, abspath(joinpath(@__DIR__, "../src")))
-include(joinpath(@__DIR__, "../src/ERCOTPipeline.jl"))
-using .ERCOTPipeline: predict_congestion
-
 const DB_PATH = abspath(joinpath(@__DIR__, "..", "data", "duckdb", "ercot.duckdb"))
 
 σ(z) = 1 / (1 + exp(-z))
