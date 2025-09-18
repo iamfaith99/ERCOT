@@ -155,10 +155,16 @@ function build_event_graph(predictions::Dict{String,Float64}, contributions;
                           logistic_params::Dict{Tuple{String,String},Tuple{Float64,Float64}}=Dict())
     graph = EventGraph()
     base_events = Dict{Symbol,Float64}()
-    get_params(kind::String, key::String, default_center::Float64, default_scale::Float64) =
-        get(logistic_params, (kind, key), (default_center, default_scale))
+    function get_params(kind::String, default_center::Float64, default_scale::Float64, keys::AbstractString...)
+        for key in keys
+            if haskey(logistic_params, (kind, String(key)))
+                return logistic_params[(kind, String(key))]
+            end
+        end
+        return (default_center, default_scale)
+    end
     for (node, value) in predictions
-        (node_center, node_scale) = get_params("node_gt25", "global", 25.0, 8.0)
+        (node_center, node_scale) = get_params("node_gt25", 25.0, 8.0, node, "global")
         prob = _logistic(value; center=node_center, scale=node_scale)
         event_symbol = sanitize_symbol("node_$(node)_gt25")
         add_event!(graph, EventNode(event_symbol; description = "Predicted congestion price > 25 for $(node)", scope = (prior = prob, tags = [:ptdf, :node])))
@@ -167,7 +173,7 @@ function build_event_graph(predictions::Dict{String,Float64}, contributions;
         parent_symbols = Symbol[]
         for contrib in contribs
             constraint_symbol = sanitize_symbol("constraint_$(contrib.constraint_name)_pos")
-            (contrib_center, contrib_scale) = get_params("contrib_pos", "global", 0.0, 10.0)
+            (contrib_center, contrib_scale) = get_params("contrib_pos", 0.0, 10.0, "global")
             mu_prob = _logistic(contrib.contribution; center=contrib_center, scale=contrib_scale)
             has_event(graph, constraint_symbol) || add_event!(graph, EventNode(constraint_symbol; description = "Constraint $(contrib.constraint_name) positive contribution", scope = (prior = mu_prob, tags = [:constraint, :ptdf])))
             base_events[constraint_symbol] = mu_prob

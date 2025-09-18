@@ -14,6 +14,21 @@ const DB_PATH = abspath(joinpath(@__DIR__, "..", "data", "duckdb", "ercot.duckdb
 
 σ(z) = 1 / (1 + exp(-z))
 
+const SCALE_GRID = 10 .^ collect(-1:0.05:1)
+const CENTER_GRID_POINTS = 25
+const MIN_GLOBAL_SAMPLES = 200
+const MIN_NODE_SAMPLES = 150
+
+function center_grid(values::Vector{Float64})
+    isempty(values) && error("Cannot build center grid for empty sample")
+    lo = quantile(values, 0.1)
+    hi = quantile(values, 0.9)
+    if !isfinite(lo) || !isfinite(hi) || hi <= lo
+        return [mean(values)]
+    end
+    return collect(range(lo, hi; length=CENTER_GRID_POINTS))
+end
+
 function brier_loss(x::Vector{Float64}, y::Vector{Float64}; center::Float64, scale::Float64)
     scale <= 0 && return Inf
     p = @. σ((x - center) / scale)
@@ -108,6 +123,8 @@ function train_node_gt25!(db::DuckDB.DB; start::DateTime, stop::DateTime, nodes_
 
     X = Float64[]
     Y = Float64[]
+    node_values = Dict{String,Vector{Float64}}()
+    node_targets = Dict{String,Vector{Float64}}()
 
     for row in eachrow(mu_df)
         minute = DateTime(row.sced_ts_utc_minute)
@@ -122,16 +139,24 @@ function train_node_gt25!(db::DuckDB.DB; start::DateTime, stop::DateTime, nodes_
             key = (node, minute)
             y = get(y_map, key, NaN)
             isnan(y) && continue
+            label = y > 25 ? 1.0 : 0.0
             push!(X, value)
-            push!(Y, y > 25 ? 1.0 : 0.0)
+            push!(Y, label)
+            node_vec = get!(node_values, node) do
+                Float64[]
+            end
+            push!(node_vec, value)
+            label_vec = get!(node_targets, node) do
+                Float64[]
+            end
+            push!(label_vec, label)
         end
     end
 
-    length(X) > 200 || error("Insufficient samples for node_gt25 calibration")
+    length(X) > MIN_GLOBAL_SAMPLES || error("Insufficient samples for node_gt25 calibration")
 
-    centers = collect(range(quantile(X, 0.1), quantile(X, 0.9); length=25))
-    scales = 10 .^ collect(-1:0.05:1)
-    best = grid_search(X, Y; centers=centers, scales=scales)
+    centers = center_grid(X)
+    best = grid_search(X, Y; centers=centers, scales=SCALE_GRID)
     write_params!(db;
                   event_kind="node_gt25",
                   scope_key="global",
@@ -142,6 +167,31 @@ function train_node_gt25!(db::DuckDB.DB; start::DateTime, stop::DateTime, nodes_
                   fitted_from=start,
                   fitted_to=stop)
     @info "Calibrated node_gt25" center=best.center scale=best.scale loss=best.loss samples=length(X)
+
+    promoted = 0
+    for (node, values) in node_values
+        labels = get(node_targets, node, Float64[])
+        length(values) == length(labels) || continue
+        length(values) < MIN_NODE_SAMPLES && continue
+        centers = center_grid(values)
+        best_node = grid_search(values, labels; centers=centers, scales=SCALE_GRID)
+        write_params!(db;
+                      event_kind="node_gt25",
+                      scope_key=node,
+                      center=best_node.center,
+                      scale=best_node.scale,
+                      sample_n=length(values),
+                      brier=best_node.loss,
+                      fitted_from=start,
+                      fitted_to=stop)
+        promoted += 1
+        @info "Calibrated node_gt25" scope=node center=best_node.center scale=best_node.scale loss=best_node.loss samples=length(values)
+    end
+    if promoted == 0
+        @info "No node-specific calibrations promoted" min_samples=MIN_NODE_SAMPLES
+    else
+        @info "Promoted node-specific calibrations" count=promoted
+    end
 end
 
 function train_contrib_pos!(db::DuckDB.DB; start::DateTime, stop::DateTime, sample_limit::Int=100_000)
@@ -173,7 +223,7 @@ function train_contrib_pos!(db::DuckDB.DB; start::DateTime, stop::DateTime, samp
     length(X) > 200 || error("Insufficient samples for contrib_pos calibration")
 
     centers = [0.0]
-    scales = 10 .^ collect(-1:0.05:1)
+    scales = SCALE_GRID
     best = grid_search(X, Y; centers=centers, scales=scales)
     write_params!(db;
                   event_kind="contrib_pos",
