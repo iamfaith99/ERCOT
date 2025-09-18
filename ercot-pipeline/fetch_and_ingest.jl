@@ -232,6 +232,18 @@ function ingest_csvs!(db::DuckDB.DB, table::String, stagedir::String)
     )
 end
 
+function run_post_ingest!(db::DuckDB.DB)
+    sql_path = joinpath(ROOT, "sql", "create_views.sql")
+    if isfile(sql_path)
+        source = read(sql_path, String)
+        for raw_stmt in split(source, ';')
+            sql = strip(raw_stmt)
+            isempty(sql) && continue
+            DuckDB.execute(db, sql)
+        end
+    end
+end
+
 function absolute_href(base_url::String, href::String)
     isempty(href) && return nothing
     startswith(href, "#") && return nothing
@@ -406,6 +418,7 @@ function run_pipeline(opts::Options)
             opts = Options(opts.config_path, opts.datasets, opts.max_new, true)
         end
     end
+
     try
         for entry in config
             name = String(entry["name"])
@@ -464,6 +477,9 @@ function run_pipeline(opts::Options)
             else
                 ingest_csvs!(db, dest_table, stagedir)
             end
+        end
+        if db !== nothing
+            run_post_ingest!(db)
         end
     finally
         db === nothing || close(db)
