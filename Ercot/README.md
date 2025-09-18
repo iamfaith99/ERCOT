@@ -56,7 +56,18 @@ DuckDB keeps historical tables hot locally, so traders can query spreads, scarci
 2. Fit elastic-net sensitivities and persist outputs: `julia scripts/fit_effective_ptdfs.jl`
 3. Optional: schedule the fitter after nightly ingestion to refresh `ref.estimated_ptdf*` tables.
 
-The fitter persists constraint/node coefficients (`ref.estimated_ptdf`), node intercepts, constraint rebasing offsets, and run metadata (window, RMSE/MAE, active constraints). Downstream analytics can pull these tables for DAG pricing or validation dashboards.
+The fitter now scans a small λ-grid with a 10% time-ordered hold-out and selects the λ that minimises validation RMSE/MAE before persisting. It writes:
+
+- `ref.estimated_ptdf` with coefficients plus `abs_beta`, `avg_abs_mu`, and `expected_impact` columns
+- `ref.estimated_ptdf_fit_metrics` for λ-grid diagnostics
+- `ref.estimated_ptdf_intercepts`, `ref.estimated_ptdf_constraint_offsets`, `ref.estimated_ptdf_metadata`, and `ref.estimated_ptdf_node_rmse`
+- `ref.estimated_ptdf_node_summary` (top-driver overview per node)
+
+Only fits whose RMSE beats the no-μ baseline by at least 5% promote from staging into the live `ref.estimated_ptdf*` tables; otherwise the previous coefficients stay in place and the new run is retained under the `_staged` tables for inspection.
+
+### PTDF scenario wiring
+
+Run `julia scripts/run_ptdf_scenario.jl` to grab the most recent μ snapshot, apply the estimated PTDFs, emit DAG events (node > 25 $/MWh, constraint contribution shares), and quote them with the LMSR helpers. This gives a quick “what-if” view of constraint forecasts inside the market-of-models stack.
 
 ## GPU-aware state assimilation prototype
 

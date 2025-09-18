@@ -28,6 +28,7 @@ function _try_load_cuda!()
 end
 
 function _try_load_amd!()
+    Sys.isapple() && return false
     return _amd_available[] ? true : begin
         try
             @eval import AMDGPU

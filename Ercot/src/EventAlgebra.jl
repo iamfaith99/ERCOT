@@ -10,7 +10,8 @@ export EventNode, EventGraph,
 
 const _VALID_SCOPE_KEYS = Set([:interval, :variable, :relation, :threshold,
                                :product, :location, :tags, :prior,
-                               :aggregator, :weights])
+                               :aggregator, :weights, :target, :given,
+                               :numerator, :denominator, :joint])
 const _VALID_RELATIONS = Set([:gt, :ge, :lt, :le, :eq, :ne])
 
 function _normalize_scope(scope::NamedTuple)
@@ -61,6 +62,9 @@ function _normalize_scope_value(key::Symbol, value)
         return Symbol(value)
     elseif key === :aggregator
         return value isa Function ? value : Symbol(value)
+    elseif key === :target || key === :given || key === :numerator ||
+           key === :denominator || key === :joint
+        return Symbol(value)
     elseif key === :weights
         if value isa NamedTuple || value isa Dict
             return value
@@ -91,6 +95,7 @@ Common scope keys:
 - `:prior` - fixed probability when not derived from a state variable
 - `:aggregator` - combine parent probabilities via a builtin symbol or custom function
 - `:weights` - optional weights for aggregators like `:weighted_sum`
+- `:target`, `:given`, `:numerator`, `:denominator`, `:joint` - helper keys for conditional and ratio-style aggregators
 """
 
 struct EventNode

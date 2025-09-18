@@ -26,7 +26,8 @@ CREATE OR REPLACE TABLE features.sced_mu AS
 SELECT *
 FROM (
     SELECT
-        STRPTIME(SCEDTimeStamp, '%m/%d/%Y %H:%M:%S') AS sced_ts_utc,
+        (STRPTIME(SCEDTimeStamp, '%m/%d/%Y %H:%M:%S') AT TIME ZONE 'America/Chicago') AS sced_ts_utc,
+        DATE_TRUNC('minute', STRPTIME(SCEDTimeStamp, '%m/%d/%Y %H:%M:%S') AT TIME ZONE 'America/Chicago') AS sced_ts_utc_minute,
         ConstraintName AS constraint_name,
         ShadowPrice AS shadow_price
     FROM market.sced_shadow_prices

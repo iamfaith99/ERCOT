@@ -10,7 +10,7 @@ import ..Device: AbstractExecutionDevice, CPUDevice, GPUDevice, to_device_array,
 import ..EventAlgebra: EventGraph, topological_order, get_event
 
 export RTCStateModel, build_rtc_state_model, simulate_ensemble, default_state_labels,
-       ensemble_event_priors
+       ensemble_event_priors, evaluate_event_priors
 
 const default_state_labels = (:load, :wind, :solar, :thermal_outage)
 
@@ -142,6 +142,12 @@ const _RELATION_FUNCS = Dict{Symbol,Function}(
     :ne => (x, thr) -> x != thr,
 )
 
+const _EPSILON = 1e-9
+
+# Heuristic combiners to derive new event probabilities from parent events.
+# Available keys: :all_true, :any_true, :mean, :min, :max, :bounded_sum, :weighted_sum,
+# :share (requires :target), :ratio (requires :numerator/:denominator), and
+# :conditional (requires :target/:given, optional :joint).
 const _BUILTIN_AGGREGATORS = Dict{Symbol,Function}(
     :all_true => (parents, order, scope) -> prod(parents[parent] for parent in order),
     :any_true => (parents, order, scope) -> begin
@@ -152,6 +158,7 @@ const _BUILTIN_AGGREGATORS = Dict{Symbol,Function}(
     :mean => (parents, order, scope) -> isempty(order) ? 0.0 : mean(parents[parent] for parent in order),
     :min => (parents, order, scope) -> isempty(order) ? 0.0 : minimum(parents[parent] for parent in order),
     :max => (parents, order, scope) -> isempty(order) ? 0.0 : maximum(parents[parent] for parent in order),
+    :bounded_sum => (parents, order, scope) -> sum(parents[parent] for parent in order),
     :weighted_sum => (parents, order, scope) -> begin
         weights = get(scope, :weights) do
             error(":weighted_sum aggregator requires :weights in scope")
@@ -174,6 +181,46 @@ const _BUILTIN_AGGREGATORS = Dict{Symbol,Function}(
             error("Unsupported weights container $(typeof(weights))")
         end
     end,
+    :share => (parents, order, scope) -> begin
+        target = get(scope, :target) do
+            error(":share aggregator requires :target in scope")
+        end
+        haskey(parents, target) || error(":share aggregator missing parent $(target)")
+        total = sum(parents[parent] for parent in order)
+        total <= _EPSILON && return 0.0
+        return parents[target] / total
+    end,
+    :ratio => (parents, order, scope) -> begin
+        numerator = get(scope, :numerator) do
+            error(":ratio aggregator requires :numerator in scope")
+        end
+        denominator = get(scope, :denominator) do
+            error(":ratio aggregator requires :denominator in scope")
+        end
+        haskey(parents, numerator) || error(":ratio aggregator missing parent $(numerator)")
+        haskey(parents, denominator) || error(":ratio aggregator missing parent $(denominator)")
+        denom = max(parents[denominator], _EPSILON)
+        return parents[numerator] / denom
+    end,
+    :conditional => (parents, order, scope) -> begin
+        target = get(scope, :target) do
+            error(":conditional aggregator requires :target in scope")
+        end
+        condition = get(scope, :given) do
+            error(":conditional aggregator requires :given in scope")
+        end
+        haskey(parents, target) || error(":conditional aggregator missing parent $(target)")
+        haskey(parents, condition) || error(":conditional aggregator missing parent $(condition)")
+        joint_key = get(scope, :joint, nothing)
+        joint_prob = if joint_key === nothing
+            min(parents[target], parents[condition])
+        else
+            haskey(parents, joint_key) || error(":conditional aggregator missing joint parent $(joint_key)")
+            parents[joint_key]
+        end
+        denom = max(parents[condition], _EPSILON)
+        return joint_prob / denom
+    end,
 )
 
 _clamp_probability(p) = clamp(Float64(p), 0.0, 1.0)
@@ -191,6 +238,26 @@ function _apply_aggregator(agg_spec, parents::Dict{Symbol,Float64}, order::Vecto
         error("Unsupported aggregator specification $(typeof(agg_spec))")
     end
     return _clamp_probability(value)
+end
+
+function evaluate_event_priors(graph::EventGraph, base_priors::Dict{Symbol,Float64}=Dict{Symbol,Float64}())
+    priors = Dict{Symbol,Float64}()
+    merge!(priors, base_priors)
+    for id in topological_order(graph)
+        node = get_event(graph, id)
+        if haskey(node.scope, :prior)
+            priors[id] = node.scope[:prior]
+        elseif haskey(node.scope, :aggregator)
+            parent_probs = Dict(parent => priors[parent] for parent in node.parents)
+            priors[id] = _apply_aggregator(node.scope[:aggregator], parent_probs, node.parents, node.scope)
+        elseif haskey(priors, id)
+            priors[id] = priors[id]
+        else
+            error("Event $(id) missing :prior or :aggregator to evaluate")
+        end
+        priors[id] = _clamp_probability(priors[id])
+    end
+    return priors
 end
 
 function _label_index(labels::NTuple{N,Symbol}, variable::Symbol) where {N}
