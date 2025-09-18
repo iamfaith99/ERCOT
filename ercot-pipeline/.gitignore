@@ -1,0 +1,11 @@
+# Ignore downloaded data and database artifacts
+/data/raw/*
+/data/staging/*
+/data/manifests/*
+/data/duckdb/*
+
+# Keep placeholder gitkeep files
+!/data/raw/.gitkeep
+!/data/staging/.gitkeep
+!/data/manifests/.gitkeep
+!/data/duckdb/.gitkeep
