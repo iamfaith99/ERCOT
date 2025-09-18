@@ -184,7 +184,7 @@ Guardrails:
 
 4. **Dependencies & scheduling**
    - Document table/view prerequisites, telemetry feeds, and modeling inputs.    
-   - Define nightly/5-min job cadence: `fetch_and_ingest` → assimilation update → PTDF refresh (daily) → LMSR price reset → risk policy evaluation.    
+   - Define nightly/5-min job cadence: `fetch_and_ingest` → logistic calibrator (`scripts/calibrate_logistics.jl`) → assimilation update → PTDF refresh (daily) → LMSR price reset → risk policy evaluation.
    - List safety/validation checks (unit tests, regression suites, CVaR and feasibility guards) and monitoring required before production trades.
 
 ---

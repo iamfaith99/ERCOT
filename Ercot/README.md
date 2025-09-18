@@ -45,6 +45,7 @@ The script keeps manifests keyed by URL + SHA256 to avoid re-downloading files a
 ## Daily operations
 
 * Schedule via cron: `0 10 * * * /usr/local/bin/julia --project /path/to/ercot-pipeline/fetch_and_ingest.jl >> /path/to/logs/ercot.log 2>&1`
+* After the SCED ingest lands the latest `features.sced_mu` snapshot, run the logistic calibrator nightly to keep `ref.logistic_map_params` current: `30 10 * * * /usr/local/bin/julia --project /path/to/ercot-pipeline/scripts/calibrate_logistics.jl >> /path/to/logs/calibrate_logistics.log 2>&1`
 * Add throttling or authentication by editing the helpers at the top of `fetch_and_ingest.jl`.
 * Extend the config with additional EMIL IDs by appending new objects to `datasets.json`.
 
