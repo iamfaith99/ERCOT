@@ -1,7 +1,8 @@
 module MarketScoring
 
 export LMSRMarket, initialize_market, price, state_prices, trade!, shares,
-       price_after_trade, simulate_trades, liquidity_from_move, clone_market
+       price_after_trade, simulate_trades, liquidity_from_move, clone_market,
+       value_claim, brier_score, log_score, calibration_metrics
 
 struct LMSRMarket
     b::Float64
@@ -119,6 +120,53 @@ function _parse_trade(trade_desc)
     else
         error("Unsupported trade descriptor $(trade_desc)")
     end
+end
+
+"""
+    value_claim(prices, claim; clamp_eps = 1e-9)
+
+Compute the Arrow–Debreu value of a contingent claim under the provided state
+price vector. `prices` should map event symbols to probabilities, while
+`claim` provides the per-event payoff (using any iterable of `(event => payoff)`
+pairs). Probabilities are clamped away from 0/1 by `clamp_eps` to keep the
+valuation numerically stable.
+"""
+
+function value_claim(prices::Dict{Symbol,Float64}, claim; clamp_eps::Float64 = 1e-9)
+    total = 0.0
+    for (event_key, payoff_raw) in pairs(claim)
+        event_sym = event_key isa Symbol ? event_key : Symbol(event_key)
+        haskey(prices, event_sym) || error("Missing price for event $(event_sym)")
+        payoff = Float64(payoff_raw)
+        p = clamp(prices[event_sym], clamp_eps, 1 - clamp_eps)
+        total += payoff * p
+    end
+    return total
+end
+
+function brier_score(price::Real, outcome::Real; clamp_eps::Float64 = 1e-9)
+    p = clamp(Float64(price), clamp_eps, 1 - clamp_eps)
+    o = clamp(Float64(outcome), 0.0, 1.0)
+    return (p - o)^2
+end
+
+function log_score(price::Real, outcome::Integer; clamp_eps::Float64 = 1e-9)
+    p = clamp(Float64(price), clamp_eps, 1 - clamp_eps)
+    return outcome == 1 ? log(p) : log1p(-p)
+end
+
+function calibration_metrics(prices::Dict{Symbol,Float64},
+                             outcomes::Dict{Symbol,<:Integer};
+                             clamp_eps::Float64 = 1e-9)
+    metrics = Dict{Symbol,NamedTuple{(:brier,:log_score),Tuple{Float64,Float64}}}()
+    for (event, outcome) in outcomes
+        price = get(prices, event, nothing)
+        price === nothing && continue
+        brier = brier_score(price, outcome; clamp_eps = clamp_eps)
+        logsc = log_score(price, outcome; clamp_eps = clamp_eps)
+        metrics[event] = (brier = brier, log_score = logsc)
+    end
+    return metrics
 end
 
 end

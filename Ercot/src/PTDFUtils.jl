@@ -8,11 +8,19 @@ using Statistics
 
 import ..EventAlgebra: EventGraph, EventNode, add_event!, has_event, upsert_event!
 import ..AssimilationModel: evaluate_event_priors, ensemble_event_priors
+import ..MarketScoring
 import ..MarketScoring: initialize_market, state_prices
 import ..AssimilationRunner: analyze_and_forecast!
 
 const EXTRA_REGRESSORS = [:scarcity_adder, :mcpc_regup, :mcpc_rrs, :mcpc_ecrs, :mcpc_nspin]
 const EXTRA_REGRESSORS_STR = String.(EXTRA_REGRESSORS)
+
+const BASIS_HUB = get(ENV, "SCENARIO_BASIS_HUB", "HB_HOUSTON")
+const BASIS_POS_THRESHOLD = parse(Float64, get(ENV, "SCENARIO_BASIS_THRESHOLD", "15.0"))
+const BASIS_NEG_THRESHOLD = parse(Float64, get(ENV, "SCENARIO_BASIS_THRESHOLD_NEG", "-15.0"))
+const STATS_LOOKBACK = Day(parse(Int, get(ENV, "SCENARIO_STATS_LOOKBACK_DAYS", "14")))
+const SCARCITY_PRC_THRESHOLD = parse(Float64, get(ENV, "SCENARIO_SCARCITY_PRC_THRESHOLD", "2000.0"))
+const METRIC_EPS = 1e-6
 
 sanitize_symbol(label::AbstractString) = Symbol(replace(label, r"[^A-Za-z0-9_]" => "_"))
 _logistic(x; center = 30.0, scale = 10.0) = 1 / (1 + exp(-(x - center) / scale))
@@ -69,6 +77,284 @@ function _load_logistic_params(db_path::AbstractString)
         close(db)
     end
     return params
+end
+
+function _load_latest_fact_row(db_path::AbstractString)
+    db = DuckDB.DB(db_path)
+    try
+        df = DataFrame(DuckDB.execute(db, """
+            WITH latest AS (SELECT max(sced_ts_utc_minute) AS ts FROM mart.fact_rt_5min)
+            SELECT *
+            FROM mart.fact_rt_5min f
+            JOIN latest l ON f.sced_ts_utc_minute = l.ts
+            LIMIT 1
+        """))
+        isempty(df) && error("mart.fact_rt_5min has no rows")
+        return df[1, :]
+    finally
+        close(db)
+    end
+end
+
+function _load_actual_node_data(db_path::AbstractString, minute::DateTime)
+    db = DuckDB.DB(db_path)
+    price_map = Dict{String,Float64}()
+    congestion_map = Dict{String,Float64}()
+    try
+        df = DataFrame(DuckDB.execute(db, """
+            SELECT settlement_point,
+                   rt_lmp,
+                   rt_lmp - COALESCE(system_lambda, 0) AS congestion
+            FROM mart.fact_rt_5min
+            WHERE sced_ts_utc_minute = ?
+        """, [minute]))
+        for row in eachrow(df)
+            node = String(row.settlement_point)
+            price_map[node] = Float64(row.rt_lmp)
+            congestion_map[node] = Float64(row.congestion)
+        end
+    finally
+        close(db)
+    end
+    return price_map, congestion_map
+end
+
+function _float_default(value, fallback)
+    if value === nothing || value === missing || isnan(Float64(value))
+        return fallback
+    end
+    return Float64(value)
+end
+
+function _retrieve_params(params::Dict{Tuple{String,String},Tuple{Float64,Float64}}, kind::String, default_center::Float64, default_scale::Float64, keys::AbstractVector{<:AbstractString})
+    for key in keys
+        val = (kind, String(key))
+        if haskey(params, val)
+            return params[val]
+        end
+    end
+    return (default_center, default_scale)
+end
+
+function _insert_prior_event!(graph::EventGraph, priors::Dict{Symbol,Float64}, symbol::Symbol, probability::Float64;
+                              description::AbstractString="", tags::AbstractVector{Symbol}=Symbol[])
+    event = EventNode(symbol; description=description, scope=(prior = probability, tags = tags))
+    if has_event(graph, symbol)
+        upsert_event!(graph, event)
+    else
+        add_event!(graph, event)
+    end
+    priors[symbol] = probability
+end
+
+clamp01(x::Float64) = clamp(x, 0.0, 1.0)
+safe_prob(x::Float64) = clamp(x, METRIC_EPS, 1 - METRIC_EPS)
+
+function _fetch_stat_thresholds(db_path::AbstractString; lookback::Period=STATS_LOOKBACK)
+    start_ts = now(Dates.UTC) - lookback
+    db = DuckDB.DB(db_path)
+    try
+        df = DataFrame(DuckDB.execute(db, """
+            WITH recent AS (
+                SELECT *
+                FROM mart.fact_rt_5min
+                WHERE sced_ts_utc >= ?
+            )
+            SELECT
+                quantile_cont(system_load_forecast_mw, 0.9) AS load_hi,
+                quantile_cont(system_load_forecast_mw, 0.5) AS load_med,
+                quantile_cont(wind_system_mw, 0.1) AS wind_low,
+                quantile_cont(wind_system_mw, 0.5) AS wind_med,
+                quantile_cont(solar_system_mw, 0.1) AS solar_low,
+                quantile_cont(solar_system_mw, 0.5) AS solar_med,
+                quantile_cont(cap_rrs_total / NULLIF(system_load_forecast_mw,0), 0.1) AS cap_ratio_low,
+                quantile_cont(cap_rrs_total / NULLIF(system_load_forecast_mw,0), 0.5) AS cap_ratio_med
+            FROM recent
+        """, [start_ts]))
+        if isempty(df)
+            return Dict{Symbol,Float64}()
+        end
+        row = df[1, :]
+        return Dict{Symbol,Float64}(
+            :load_hi => _float_default(get(row, :load_hi, missing), 45_000.0),
+            :load_med => _float_default(get(row, :load_med, missing), 30_000.0),
+            :wind_low => _float_default(get(row, :wind_low, missing), 5_000.0),
+            :wind_med => _float_default(get(row, :wind_med, missing), 10_000.0),
+            :solar_low => _float_default(get(row, :solar_low, missing), 2_000.0),
+            :solar_med => _float_default(get(row, :solar_med, missing), 4_000.0),
+            :cap_ratio_low => _float_default(get(row, :cap_ratio_low, missing), 0.05),
+            :cap_ratio_med => _float_default(get(row, :cap_ratio_med, missing), 0.10)
+        )
+    finally
+        close(db)
+    end
+end
+
+function _node_bucket_probabilities(node::String, predicted::Float64, center::Float64, scale::Float64, actual_price::Union{Missing,Float64})
+    center0 = center + (0.0 - 25.0)
+    center100 = center + (100.0 - 25.0)
+    p_gt0 = clamp01(_logistic(predicted; center=center0, scale=scale))
+    p_gt25 = clamp01(_logistic(predicted; center=center, scale=scale))
+    p_gt100 = clamp01(_logistic(predicted; center=center100, scale=scale))
+    p_le0 = clamp01(1 - p_gt0)
+    p_0_25 = clamp01(p_gt0 - p_gt25)
+    p_25_100 = clamp01(p_gt25 - p_gt100)
+    p_ge100 = clamp01(p_gt100)
+    total = p_le0 + p_0_25 + p_25_100 + p_ge100
+    if total > 0
+        p_le0 /= total
+        p_0_25 /= total
+        p_25_100 /= total
+        p_ge100 /= total
+    end
+    bucket_events = Dict{Symbol,Float64}(
+        sanitize_symbol("node_$(node)_bucket_le0") => p_le0,
+        sanitize_symbol("node_$(node)_bucket_0_25") => p_0_25,
+        sanitize_symbol("node_$(node)_bucket_25_100") => p_25_100,
+        sanitize_symbol("node_$(node)_bucket_ge100") => p_ge100,
+    )
+    outcomes = Dict{Symbol,Int}()
+    if !(actual_price === missing) && isfinite(Float64(actual_price))
+        price_val = Float64(actual_price)
+        selected = if price_val <= 0
+            sanitize_symbol("node_$(node)_bucket_le0")
+        elseif price_val < 25
+            sanitize_symbol("node_$(node)_bucket_0_25")
+        elseif price_val < 100
+            sanitize_symbol("node_$(node)_bucket_25_100")
+        else
+            sanitize_symbol("node_$(node)_bucket_ge100")
+        end
+        for sym in keys(bucket_events)
+            outcomes[sym] = sym == selected ? 1 : 0
+        end
+    end
+    return bucket_events, outcomes
+end
+
+function _node_basis_probabilities(node::String, predicted::Float64, hub_predicted::Float64,
+                                   actual_price::Union{Missing,Float64}, hub_actual::Union{Missing,Float64},
+                                   logistic_params::Dict{Tuple{String,String},Tuple{Float64,Float64}})
+    basis_pred = predicted - hub_predicted
+    key = string(node, "|", BASIS_HUB)
+    (pos_center, pos_scale) = _retrieve_params(logistic_params, "basis_spike_pos", BASIS_POS_THRESHOLD, max(BASIS_POS_THRESHOLD * 0.25, 5.0), [key, "global"])
+    (neg_center_raw, neg_scale) = _retrieve_params(logistic_params, "basis_spike_neg", abs(BASIS_NEG_THRESHOLD), max(abs(BASIS_NEG_THRESHOLD) * 0.25, 5.0), [key, "global"])
+    pos_prob = clamp01(_logistic(basis_pred; center=pos_center, scale=pos_scale))
+    neg_prob = clamp01(_logistic(-basis_pred; center=neg_center_raw, scale=neg_scale))
+    basis_events = Dict{Symbol,Float64}(
+        sanitize_symbol("basis_spike_pos_$(node)_vs_$(BASIS_HUB)") => pos_prob,
+        sanitize_symbol("basis_spike_neg_$(node)_vs_$(BASIS_HUB)") => neg_prob,
+    )
+    outcomes = Dict{Symbol,Int}()
+    if !(actual_price === missing || hub_actual === missing)
+        actual_basis = Float64(actual_price) - Float64(hub_actual)
+        pos_sym = sanitize_symbol("basis_spike_pos_$(node)_vs_$(BASIS_HUB)")
+        neg_sym = sanitize_symbol("basis_spike_neg_$(node)_vs_$(BASIS_HUB)")
+        outcomes[pos_sym] = actual_basis >= pos_center ? 1 : 0
+        outcomes[neg_sym] = actual_basis <= -neg_center_raw ? 1 : 0
+    end
+    return basis_events, outcomes
+end
+
+function expand_event_vocabulary!(graph::EventGraph,
+                                  priors::Dict{Symbol,Float64},
+                                  predictions::Dict{String,Float64},
+                                  contributions;
+                                  logistic_params::Dict{Tuple{String,String},Tuple{Float64,Float64}}=Dict(),
+                                  fact_row=nothing,
+                                  thresholds::Union{Nothing,Dict{Symbol,Float64}}=nothing,
+                                  price_map::Union{Nothing,Dict{String,Float64}}=nothing,
+                                  congestion_map::Union{Nothing,Dict{String,Float64}}=nothing,
+                                  hub::String=BASIS_HUB,
+                                  feature_values::Union{Nothing,Dict{String,Float64}}=nothing)
+    threshold_map = thresholds === nothing ? Dict{Symbol,Float64}() : thresholds
+    event_outcomes = Dict{Symbol,Int}()
+
+    hub_predicted = get(predictions, hub, NaN)
+    hub_actual_val = price_map === nothing ? NaN : get(price_map, hub, NaN)
+    hub_actual = isfinite(hub_actual_val) ? hub_actual_val : missing
+
+    for (node, value) in predictions
+        node_symbol = sanitize_symbol("node_$(node)_gt25")
+        if congestion_map !== nothing
+            actual_cong = get(congestion_map, node, nothing)
+            if actual_cong !== nothing
+                event_outcomes[node_symbol] = Float64(actual_cong) > 25.0 ? 1 : 0
+            end
+        end
+
+        if feature_values !== nothing
+            contribs = get(contributions, node, NamedTuple[])
+            for contrib in contribs
+                constraint_symbol = sanitize_symbol("constraint_$(contrib.constraint_name)_pos")
+                actual_mu = get(feature_values, contrib.constraint_name, 0.0)
+                event_outcomes[constraint_symbol] = actual_mu > 0 ? 1 : 0
+            end
+        end
+
+        (node_center, node_scale) = _retrieve_params(logistic_params, "node_gt25", 25.0, 8.0, [node, "global"])
+        actual_price = price_map === nothing ? missing : get(price_map, node, missing)
+        bucket_probs, bucket_outcomes = _node_bucket_probabilities(node, value, node_center, node_scale, actual_price)
+        for (sym, prob) in bucket_probs
+            _insert_prior_event!(graph, priors, sym, prob; description = "Probability node $(node) settles in bucket", tags = [:bucket, :node])
+        end
+        for (sym, outcome) in bucket_outcomes
+            event_outcomes[sym] = outcome
+        end
+
+        if isfinite(hub_predicted)
+            basis_probs, basis_outcomes = _node_basis_probabilities(node, value, hub_predicted, actual_price, hub_actual, logistic_params)
+            for (sym, prob) in basis_probs
+                _insert_prior_event!(graph, priors, sym, prob; description = "Basis spike for $(node) vs $(hub)", tags = [:basis, :node])
+            end
+            for (sym, outcome) in basis_outcomes
+                event_outcomes[sym] = outcome
+            end
+        end
+    end
+
+    if fact_row !== nothing
+        load_value = Float64(coalesce(get(fact_row, :system_load_forecast_mw, missing), 0.0))
+        wind_value = Float64(coalesce(get(fact_row, :wind_system_mw, missing), 0.0))
+        solar_value = Float64(coalesce(get(fact_row, :solar_system_mw, missing), 0.0))
+        cap_rrs_total = Float64(coalesce(get(fact_row, :cap_rrs_total, missing), 0.0))
+
+        load_hi_center = get(threshold_map, :load_hi, load_value)
+        load_med = get(threshold_map, :load_med, max(load_value, 1.0))
+        load_scale_default = max(abs(load_hi_center - load_med) / 2, max(load_hi_center * 0.05, 100.0))
+        (load_center, load_scale) = _retrieve_params(logistic_params, "load_hi", load_hi_center, load_scale_default, ["global"])
+        load_prob = _logistic(load_value; center = load_center, scale = load_scale)
+        _insert_prior_event!(graph, priors, :load_hi, clamp01(load_prob); description = "System load high regime", tags = [:load, :regime])
+        event_outcomes[:load_hi] = load_value >= load_center ? 1 : 0
+
+        wind_low = get(threshold_map, :wind_low, wind_value)
+        wind_med = get(threshold_map, :wind_med, max(wind_value, 1.0))
+        wind_scale_default = max(abs(wind_med - wind_low) / 2, max(abs(wind_low) * 0.1, 50.0))
+        (wind_center, wind_scale) = _retrieve_params(logistic_params, "wind_down", wind_low, wind_scale_default, ["global"])
+        wind_prob = _logistic(wind_center - wind_value; center = 0.0, scale = wind_scale)
+        _insert_prior_event!(graph, priors, :wind_down, clamp01(wind_prob); description = "Wind generation down regime", tags = [:wind, :regime])
+        event_outcomes[:wind_down] = wind_value <= wind_center ? 1 : 0
+
+        solar_low = get(threshold_map, :solar_low, solar_value)
+        solar_med = get(threshold_map, :solar_med, max(solar_value, 1.0))
+        solar_scale_default = max(abs(solar_med - solar_low) / 2, max(abs(solar_low) * 0.1, 20.0))
+        (solar_center, solar_scale) = _retrieve_params(logistic_params, "solar_down", solar_low, solar_scale_default, ["global"])
+        solar_prob = _logistic(solar_center - solar_value; center = 0.0, scale = solar_scale)
+        _insert_prior_event!(graph, priors, :solar_down, clamp01(solar_prob); description = "Solar generation down regime", tags = [:solar, :regime])
+        event_outcomes[:solar_down] = solar_value <= solar_center ? 1 : 0
+
+        load_denom = max(load_value, 1.0)
+        cap_ratio = load_denom == 0 ? 0.0 : cap_rrs_total / load_denom
+        cap_low = get(threshold_map, :cap_ratio_low, 0.05)
+        cap_med = get(threshold_map, :cap_ratio_med, 0.1)
+        cap_scale_default = max(abs(cap_med - cap_low) / 2, 0.01)
+        (cap_center, cap_scale) = _retrieve_params(logistic_params, "tightness_low_cap", cap_low, cap_scale_default, ["global"])
+        tight_prob = _logistic(cap_center - cap_ratio; center = 0.0, scale = cap_scale)
+        _insert_prior_event!(graph, priors, :tightness_low_cap, clamp01(tight_prob); description = "Reserve tightness low", tags = [:tightness, :regime])
+        event_outcomes[:tightness_low_cap] = cap_ratio <= cap_center ? 1 : 0
+    end
+
+    return event_outcomes
 end
 
 function load_latest_snapshot(db_path::AbstractString)
@@ -155,16 +441,8 @@ function build_event_graph(predictions::Dict{String,Float64}, contributions;
                           logistic_params::Dict{Tuple{String,String},Tuple{Float64,Float64}}=Dict())
     graph = EventGraph()
     base_events = Dict{Symbol,Float64}()
-    function get_params(kind::String, default_center::Float64, default_scale::Float64, keys::AbstractString...)
-        for key in keys
-            if haskey(logistic_params, (kind, String(key)))
-                return logistic_params[(kind, String(key))]
-            end
-        end
-        return (default_center, default_scale)
-    end
     for (node, value) in predictions
-        (node_center, node_scale) = get_params("node_gt25", 25.0, 8.0, node, "global")
+        (node_center, node_scale) = _retrieve_params(logistic_params, "node_gt25", 25.0, 8.0, [node, "global"])
         prob = _logistic(value; center=node_center, scale=node_scale)
         event_symbol = sanitize_symbol("node_$(node)_gt25")
         add_event!(graph, EventNode(event_symbol; description = "Predicted congestion price > 25 for $(node)", scope = (prior = prob, tags = [:ptdf, :node])))
@@ -173,7 +451,7 @@ function build_event_graph(predictions::Dict{String,Float64}, contributions;
         parent_symbols = Symbol[]
         for contrib in contribs
             constraint_symbol = sanitize_symbol("constraint_$(contrib.constraint_name)_pos")
-            (contrib_center, contrib_scale) = get_params("contrib_pos", 0.0, 10.0, "global")
+            (contrib_center, contrib_scale) = _retrieve_params(logistic_params, "contrib_pos", 0.0, 10.0, ["global"])
             mu_prob = _logistic(contrib.contribution; center=contrib_center, scale=contrib_scale)
             has_event(graph, constraint_symbol) || add_event!(graph, EventNode(constraint_symbol; description = "Constraint $(contrib.constraint_name) positive contribution", scope = (prior = mu_prob, tags = [:constraint, :ptdf])))
             base_events[constraint_symbol] = mu_prob
@@ -197,7 +475,7 @@ function upsert_assimilation_events!(graph::EventGraph,
                                      model,
                                      Xa,
                                      config;
-                                     prc_threshold::Float64=2000.0)
+                                     prc_threshold::Float64=SCARCITY_PRC_THRESHOLD)
     added = Symbol[]
     scarcity_symbol = :scarcity_hi
     if !has_event(graph, scarcity_symbol)
@@ -237,10 +515,49 @@ function scenario_summary(db_path::AbstractString; nodes_filter::Union{Nothing,V
                                                        top_constraints=top_constraints)
     logistic_params = _load_logistic_params(db_path)
     graph, priors = build_event_graph(predictions, contribution_map; logistic_params=logistic_params)
+
+    fact_row = _load_latest_fact_row(db_path)
+    thresholds = _fetch_stat_thresholds(db_path)
+    load_value = Float64(coalesce(get(fact_row, :system_load_forecast_mw, missing), 0.0))
+    wind_value = Float64(coalesce(get(fact_row, :wind_system_mw, missing), 0.0))
+    solar_value = Float64(coalesce(get(fact_row, :solar_system_mw, missing), 0.0))
+    cap_rrs_total = Float64(coalesce(get(fact_row, :cap_rrs_total, missing), 0.0))
+    fact_prc = Float64(coalesce(get(fact_row, :prc, missing), 0.0))
+
+    minute_ts = DateTime(mu_row[1, "sced_ts_utc_minute"])
+    price_map, congestion_map = _load_actual_node_data(db_path, minute_ts)
+    hub_predicted = get(predictions, BASIS_HUB, NaN)
+    hub_actual = get(price_map, BASIS_HUB, NaN)
+
+    event_outcomes = expand_event_vocabulary!(graph, priors, predictions, contribution_map;
+                                              logistic_params=logistic_params,
+                                              fact_row=fact_row,
+                                              thresholds=thresholds,
+                                              price_map=price_map,
+                                              congestion_map=congestion_map,
+                                              hub=BASIS_HUB,
+                                              feature_values=feature_values)
+
     assimilation_meta = nothing
+    mu_lookup = Dict{Symbol,String}()
     try
         model, Xa, config, meta = analyze_and_forecast!()
-        new_entries = upsert_assimilation_events!(graph, priors, model, Xa, config)
+        new_entries = upsert_assimilation_events!(graph, priors, model, Xa, config; prc_threshold=SCARCITY_PRC_THRESHOLD)
+        for pair in config.mu_pairs
+            mu_lookup[pair[1]] = pair[2]
+        end
+        for (sym, _) in new_entries
+            str_sym = String(sym)
+            if sym == :scarcity_hi
+                event_outcomes[sym] = fact_prc > SCARCITY_PRC_THRESHOLD ? 1 : 0
+            elseif startswith(str_sym, "binds_")
+                sanitized_label = Symbol(str_sym[length("binds_")+1:end])
+                raw = get(mu_lookup, sanitized_label, nothing)
+                raw === nothing && continue
+                mu_value = get(feature_values, raw, 0.0)
+                event_outcomes[sym] = mu_value > 0 ? 1 : 0
+            end
+        end
         assimilation_meta = Dict{Symbol,Any}(
             :ensemble_size => size(Xa, 2),
             :labels => String.(config.labels),
@@ -256,6 +573,8 @@ function scenario_summary(db_path::AbstractString; nodes_filter::Union{Nothing,V
     end
     market = initialize_market(priors; b = b)
     prices = state_prices(market)
+    metric_map = MarketScoring.calibration_metrics(prices, event_outcomes; clamp_eps = METRIC_EPS)
+    calibration_metrics_dict = Dict(String(k) => v for (k, v) in metric_map)
     node_payload = Dict{String,Any}()
     for (node, value) in predictions
         drivers = [Dict(
@@ -277,12 +596,23 @@ function scenario_summary(db_path::AbstractString; nodes_filter::Union{Nothing,V
     if assimilation_meta !== nothing
         metadata_dict[:assimilation] = assimilation_meta
     end
+
+    thresholds_serialized = Dict{String,Float64}()
+    for (k, v) in thresholds
+        thresholds_serialized[String(k)] = v
+    end
+
+    event_outcome_strings = Dict(String(k) => v for (k, v) in event_outcomes)
+
     return Dict(
         :timestamp => string(mu_row[1, "sced_ts_utc"]),
         :liquidity => b,
         :metadata => metadata_dict,
         :nodes => node_payload,
-        :event_prices => Dict(String(k) => v for (k, v) in prices)
+        :event_prices => Dict(String(k) => v for (k, v) in prices),
+        :event_outcomes => event_outcome_strings,
+        :thresholds => thresholds_serialized,
+        :calibration_metrics => calibration_metrics_dict
     )
 end
 
@@ -303,6 +633,9 @@ function persist_event_prices!(db_path::AbstractString, summary::Dict{Symbol,<:A
         liquidity = fill(Float64(liquidity), length(events)),
         source = fill(source, length(events))
     )
+
+    outcomes = get(summary, :event_outcomes, nothing)
+    outcome_map = outcomes === nothing ? Dict{String,Int}() : Dict(outcomes)
 
     db = DuckDB.DB(db_path)
     try
@@ -327,6 +660,60 @@ function persist_event_prices!(db_path::AbstractString, summary::Dict{Symbol,<:A
         finally
             DuckDB.unregister_data_frame(db, "event_prices_tmp")
         end
+
+        metrics_lookup = get(summary, :calibration_metrics, nothing)
+        metrics_dict = if metrics_lookup === nothing
+            price_symbol_map = Dict(Symbol(k) => Float64(v) for (k, v) in event_prices)
+            outcome_symbol_map = Dict(Symbol(k) => v for (k, v) in outcome_map)
+            computed = MarketScoring.calibration_metrics(price_symbol_map, outcome_symbol_map; clamp_eps = METRIC_EPS)
+            Dict(String(k) => v for (k, v) in computed)
+        else
+            Dict(metrics_lookup)
+        end
+
+        if !isempty(outcome_map)
+            DuckDB.execute(db, """
+                CREATE TABLE IF NOT EXISTS mart.event_calibration_history (
+                    sced_ts_utc_minute TIMESTAMPTZ,
+                    event_id TEXT,
+                    price DOUBLE,
+                    outcome INTEGER,
+                    brier DOUBLE,
+                    log_score DOUBLE,
+                    source TEXT,
+                    PRIMARY KEY (sced_ts_utc_minute, event_id, source)
+                )
+            """)
+
+            metrics_rows = NamedTuple{(:sced_ts_utc_minute,:event_id,:price,:outcome,:brier,:log_score,:source),Tuple{DateTime,String,Float64,Int,Float64,Float64,String}}[]
+            for (idx, event_id) in enumerate(events)
+                outcome = get(outcome_map, event_id, nothing)
+                outcome === nothing && continue
+                metrics = get(metrics_dict, event_id, nothing)
+                if metrics === nothing
+                    price_val = prices[idx]
+                    brier = MarketScoring.brier_score(price_val, outcome; clamp_eps = METRIC_EPS)
+                    log_score = MarketScoring.log_score(price_val, outcome; clamp_eps = METRIC_EPS)
+                else
+                    brier = Float64(metrics.brier)
+                    log_score = Float64(metrics.log_score)
+                end
+                push!(metrics_rows, (ts, event_id, prices[idx], Int(outcome), brier, log_score, source))
+            end
+
+            if !isempty(metrics_rows)
+                metrics_df = DataFrame(metrics_rows)
+                DuckDB.register_data_frame(db, metrics_df, "event_metrics_tmp")
+                try
+                    DuckDB.execute(db, """
+                        INSERT OR REPLACE INTO mart.event_calibration_history
+                        SELECT * FROM event_metrics_tmp;
+                    """)
+                finally
+                    DuckDB.unregister_data_frame(db, "event_metrics_tmp")
+                end
+            end
+        end
     finally
         close(db)
     end
@@ -349,6 +736,10 @@ function persist_risk_log!(db_path::AbstractString, entries::Vector{<:NamedTuple
                 direction TEXT,
                 trade_basis DOUBLE,
                 quantity DOUBLE,
+                base_quantity DOUBLE,
+                policy_weight DOUBLE,
+                policy TEXT,
+                policy_score DOUBLE,
                 signed_quantity DOUBLE,
                 scenario_base DOUBLE,
                 scenario_up DOUBLE,
@@ -369,6 +760,23 @@ function persist_risk_log!(db_path::AbstractString, entries::Vector{<:NamedTuple
                 PRIMARY KEY (sced_ts_utc, node, hub)
             )
         """)
+        cols = DataFrame(DuckDB.execute(db, "PRAGMA table_info('mart.risk_log')"))
+        existing_cols = Set(String.(cols.name))
+        alter_map = Dict(
+            "base_quantity" => "ALTER TABLE mart.risk_log ADD COLUMN base_quantity DOUBLE",
+            "policy_weight" => "ALTER TABLE mart.risk_log ADD COLUMN policy_weight DOUBLE",
+            "policy" => "ALTER TABLE mart.risk_log ADD COLUMN policy TEXT",
+            "policy_score" => "ALTER TABLE mart.risk_log ADD COLUMN policy_score DOUBLE",
+        )
+        for (col, stmt) in alter_map
+            if !(col in existing_cols)
+                try
+                    DuckDB.execute(db, stmt)
+                catch err
+                    @debug "risk_log alter" stmt exception=(err, catch_backtrace())
+                end
+            end
+        end
 
         DuckDB.register_data_frame(db, df, "risk_log_tmp")
         try

@@ -11,23 +11,12 @@ using Random
 using Statistics
 
 const DB_PATH = abspath(joinpath(@__DIR__, "..", "data", "duckdb", "ercot.duckdb"))
-
-σ(z) = 1 / (1 + exp(-z))
-
 const SCALE_GRID = 10 .^ collect(-1:0.05:1)
 const CENTER_GRID_POINTS = 25
-const MIN_GLOBAL_SAMPLES = 200
-const MIN_NODE_SAMPLES = 150
+const MIN_GLOBAL_SAMPLES = 500
+const MIN_NODE_SAMPLES = 500
 
-function center_grid(values::Vector{Float64})
-    isempty(values) && error("Cannot build center grid for empty sample")
-    lo = quantile(values, 0.1)
-    hi = quantile(values, 0.9)
-    if !isfinite(lo) || !isfinite(hi) || hi <= lo
-        return [mean(values)]
-    end
-    return collect(range(lo, hi; length=CENTER_GRID_POINTS))
-end
+σ(z) = 1 / (1 + exp(-z))
 
 function brier_loss(x::Vector{Float64}, y::Vector{Float64}; center::Float64, scale::Float64)
     scale <= 0 && return Inf
@@ -48,6 +37,20 @@ function grid_search(x::Vector{Float64}, y::Vector{Float64}; centers::AbstractVe
         end
     end
     return (center=best_center, scale=best_scale, loss=best_loss)
+end
+
+function center_grid(values::Vector{Float64})
+    isempty(values) && error("Cannot build center grid for empty sample")
+    lo = quantile(values, 0.1)
+    hi = quantile(values, 0.9)
+    if !isfinite(lo) || !isfinite(hi)
+        lo, hi = minimum(values), maximum(values)
+    end
+    if hi <= lo
+        span = max(abs(lo), 1.0)
+        return [lo - span, lo, lo + span]
+    end
+    return collect(range(lo, hi; length=CENTER_GRID_POINTS))
 end
 
 function ensure_table!(db::DuckDB.DB)
@@ -153,7 +156,7 @@ function train_node_gt25!(db::DuckDB.DB; start::DateTime, stop::DateTime, nodes_
         end
     end
 
-    length(X) > MIN_GLOBAL_SAMPLES || error("Insufficient samples for node_gt25 calibration")
+    length(X) >= MIN_GLOBAL_SAMPLES || error("Insufficient samples for node_gt25 calibration")
 
     centers = center_grid(X)
     best = grid_search(X, Y; centers=centers, scales=SCALE_GRID)
@@ -166,7 +169,7 @@ function train_node_gt25!(db::DuckDB.DB; start::DateTime, stop::DateTime, nodes_
                   brier=best.loss,
                   fitted_from=start,
                   fitted_to=stop)
-    @info "Calibrated node_gt25" center=best.center scale=best.scale loss=best.loss samples=length(X)
+    @info "Calibrated node_gt25" scope="global" center=best.center scale=best.scale loss=best.loss samples=length(X)
 
     promoted = 0
     for (node, values) in node_values

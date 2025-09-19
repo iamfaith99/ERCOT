@@ -15,7 +15,8 @@ using .EnKF: EnKFFilter, build_enkf, update_ensemble!
 using .EventAlgebra: EventNode, EventGraph, add_event!, upsert_event!, has_event, get_event,
                      parents, children, ancestors, topological_order
 using .MarketScoring: LMSRMarket, initialize_market, price, state_prices, trade!, shares,
-                      price_after_trade, simulate_trades, liquidity_from_move, clone_market
+                      price_after_trade, simulate_trades, liquidity_from_move, clone_market,
+                      value_claim, brier_score, log_score, calibration_metrics
 using .AssimilationRunner: analyze_and_forecast!
 using .PTDFUtils: EXTRA_REGRESSORS, EXTRA_REGRESSORS_STR, load_latest_snapshot, load_metadata,
                   model_is_fresh, model_improvement, build_feature_vector, predict_congestion,
@@ -33,6 +34,7 @@ export AbstractExecutionDevice, CPUDevice, GPUDevice,
        parents, children, ancestors, topological_order,
        LMSRMarket, initialize_market, price, state_prices, trade!, shares,
        price_after_trade, simulate_trades, liquidity_from_move, clone_market,
+       value_claim, brier_score, log_score, calibration_metrics,
        analyze_and_forecast!,
        EXTRA_REGRESSORS, EXTRA_REGRESSORS_STR, load_latest_snapshot, load_metadata,
        model_is_fresh, model_improvement, build_feature_vector, predict_congestion,

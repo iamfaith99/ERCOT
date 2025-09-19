@@ -10,6 +10,8 @@ push!(LOAD_PATH, abspath(joinpath(@__DIR__, "../src")))
 include(joinpath(@__DIR__, "../src/ERCOTPipeline.jl"))
 using .ERCOTPipeline
 
+const PTDF = ERCOTPipeline.PTDFUtils
+
 const DB_PATH = abspath(joinpath(@__DIR__, "..", "data", "duckdb", "ercot.duckdb"))
 const SCENARIO_LABELS = (:base, :up, :down)
 
@@ -119,6 +121,7 @@ function data_is_fresh(tick_time; tolerance::Period = Minute(10))
 end
 
 function suggest_trades(mu_row, beta_df, intercept_df;
+                        db_path::AbstractString,
                         hub::String,
                         target_nodes::Vector{String},
                         top_constraints::Int,
@@ -128,18 +131,34 @@ function suggest_trades(mu_row, beta_df, intercept_df;
                         scenario_probs,
                         cvar_alpha::Float64,
                         max_quantity::Float64,
-                        tick_time)
+                        tick_time,
+                        policy::String,
+                        temperature::Float64,
+                        policy_risk_aversion::Float64)
     feature_values = build_feature_vector(mu_row)
+    logistic_params = PTDF._load_logistic_params(db_path)
+    thresholds = PTDF._fetch_stat_thresholds(db_path)
+    fact_row = PTDF._load_latest_fact_row(db_path)
+    minute_ts = DateTime(mu_row[1, "sced_ts_utc_minute"])
+    price_map, congestion_map = PTDF._load_actual_node_data(db_path, minute_ts)
     nodes_for_eval = unique([target_nodes...; hub])
     predictions, contributions = predict_congestion(beta_df, intercept_df, feature_values; nodes_filter = nodes_for_eval, top_constraints = top_constraints)
-    results = NamedTuple{(:node,:basis,:drivers,:direction,:quantity,:scenario_basis,:scenario_pnl,:cvar_95,:expected_pnl,:probabilities,:signed_quantity)}[]
-    risk_entries = NamedTuple{(:sced_ts_utc,:node,:hub,:direction,:trade_basis,:quantity,:signed_quantity,
+    results = NamedTuple{(:node,:basis,:drivers,:direction,:quantity,:base_quantity,:policy_weight,:policy,:scenario_basis,:scenario_pnl,:cvar_95,:expected_pnl,:probabilities,:signed_quantity,:value_claim_unit,:value_claim_total)}[]
+    risk_entries = NamedTuple{(:sced_ts_utc,:node,:hub,:direction,:trade_basis,:quantity,:base_quantity,:policy_weight,:policy,:policy_score,:signed_quantity,
                                :scenario_base,:scenario_up,:scenario_down,
                                :pnl_base,:pnl_up,:pnl_down,
                                :prob_base,:prob_up,:prob_down,
                                :cvar_95,:cvar_per_unit,:expected_pnl,:expected_pnl_per_unit,
                                :risk_budget,:max_quantity,:created_at)}[]
     graph, priors = build_event_graph(predictions, contributions)
+    _ = PTDF.expand_event_vocabulary!(graph, priors, predictions, contributions;
+                                      logistic_params = logistic_params,
+                                      fact_row = fact_row,
+                                      thresholds = thresholds,
+                                      price_map = price_map,
+                                      congestion_map = congestion_map,
+                                      hub = hub,
+                                      feature_values = feature_values)
     market = initialize_market(priors; b = 5.0)
     event_prices = state_prices(market)
 
@@ -162,12 +181,17 @@ function suggest_trades(mu_row, beta_df, intercept_df;
         cvar_per_unit = compute_cvar(scenario_pnl_unit, scenario_probs; alpha = cvar_alpha)
         expected_per_unit = expected_value(scenario_pnl_unit, scenario_probs)
 
-        quantity = 0.0
+        base_quantity = 0.0
         if abs(cvar_per_unit) > 1e-6
-            quantity = min(max_quantity, risk_budget / abs(cvar_per_unit))
-        else
-            quantity = 0.0
+            base_quantity = min(max_quantity, risk_budget / abs(cvar_per_unit))
         end
+        policy_weight = 1.0
+        policy_score = expected_per_unit - policy_risk_aversion * abs(cvar_per_unit)
+        if policy == "maxent"
+            temp = temperature <= 0 ? 1.0 : temperature
+            policy_weight = 1 / (1 + exp(-policy_score / temp))
+        end
+        quantity = base_quantity * policy_weight
         signed_quantity = direction_sign * quantity
         scenario_pnl_total = (base = scenario_pnl_unit.base * quantity,
                               up = scenario_pnl_unit.up * quantity,
@@ -175,17 +199,34 @@ function suggest_trades(mu_row, beta_df, intercept_df;
         cvar_total = cvar_per_unit * quantity
         expected_total = expected_per_unit * quantity
 
+        basis_pos_sym = PTDF.sanitize_symbol("basis_spike_pos_$(node)_vs_$(PTDF.BASIS_HUB)")
+        basis_neg_sym = PTDF.sanitize_symbol("basis_spike_neg_$(node)_vs_$(PTDF.BASIS_HUB)")
+        claim = Dict{Symbol,Float64}()
+        if haskey(event_prices, basis_pos_sym)
+            claim[basis_pos_sym] = direction_sign * scenario_delta
+        end
+        if haskey(event_prices, basis_neg_sym)
+            claim[basis_neg_sym] = -direction_sign * scenario_delta
+        end
+        value_claim_unit = isempty(claim) ? 0.0 : value_claim(event_prices, claim)
+        value_claim_total = value_claim_unit * quantity
+
         push!(results, (node = node,
                         basis = basis,
                         drivers = drivers,
                         direction = direction,
                         quantity = quantity,
+                        base_quantity = base_quantity,
+                        policy_weight = policy_weight,
+                        policy = policy,
                         scenario_basis = scenario_basis,
                         scenario_pnl = scenario_pnl_total,
                         cvar_95 = cvar_total,
                         expected_pnl = expected_total,
                         probabilities = scenario_probs,
-                        signed_quantity = signed_quantity))
+                        signed_quantity = signed_quantity,
+                        value_claim_unit = value_claim_unit,
+                        value_claim_total = value_claim_total))
 
         push!(risk_entries, (
             sced_ts_utc = tick_time,
@@ -194,6 +235,10 @@ function suggest_trades(mu_row, beta_df, intercept_df;
             direction = direction,
             trade_basis = basis,
             quantity = quantity,
+            base_quantity = base_quantity,
+            policy_weight = policy_weight,
+            policy = policy,
+            policy_score = policy_score,
             signed_quantity = signed_quantity,
             scenario_base = scenario_basis.base,
             scenario_up = scenario_basis.up,
@@ -228,6 +273,26 @@ function main()
     cone_constraints = parse_env("TRADING_SCENARIO_CONSTRAINTS", 2, x -> parse(Int, x))
     cvar_alpha = parse_env("TRADING_CVAR_ALPHA", 0.95, x -> parse(Float64, x))
     max_quantity = parse_env("TRADING_MAX_QUANTITY", 200.0, x -> parse(Float64, x))
+    raw_policy = lowercase(strip(get(ENV, "TRADING_POLICY", "cvar")))
+    policy_candidates = if isempty(raw_policy)
+        ["cvar"]
+    elseif occursin(',', raw_policy)
+        filter(!isempty, strip.(split(raw_policy, ',')))
+    elseif raw_policy in ("swap", "both")
+        ["cvar", "maxent"]
+    else
+        [raw_policy]
+    end
+    policy_cycle = String[]
+    for mode in policy_candidates
+        mode_norm = lowercase(strip(mode))
+        if mode_norm in ("cvar", "maxent")
+            push!(policy_cycle, mode_norm)
+        end
+    end
+    isempty(policy_cycle) && push!(policy_cycle, "cvar")
+    temperature = parse_env("TRADING_TEMPERATURE", 50.0, x -> parse(Float64, x))
+    policy_risk_aversion = parse_env("TRADING_POLICY_RISK_AVERSION", 1.0, x -> parse(Float64, x))
 
     scenario_delta_override = parse_optional_env("TRADING_SCENARIO_DELTA", x -> parse(Float64, x))
     scenario_probs_override = get(ENV, "TRADING_SCENARIO_PROBS", nothing)
@@ -290,7 +355,11 @@ function main()
             maybe_sleep(iter); continue
         end
 
+        policy_idx = mod(iter - 1, length(policy_cycle)) + 1
+        policy_mode = policy_cycle[policy_idx]
+
         trades, event_prices, risk_entries = suggest_trades(mu_row, beta_df, intercept_df;
+                                                           db_path = DB_PATH,
                                                            hub = hub,
                                                            target_nodes = nodes,
                                                            top_constraints = top_constraints,
@@ -300,14 +369,17 @@ function main()
                                                            scenario_probs = scenario_probs,
                                                            cvar_alpha = cvar_alpha,
                                                            max_quantity = max_quantity,
-                                                           tick_time = tick_time)
+                                                           tick_time = tick_time,
+                                                           policy = policy_mode,
+                                                           temperature = temperature,
+                                                           policy_risk_aversion = policy_risk_aversion)
 
         if isempty(trades)
             @info "No trade suggestions for this tick" tick_time
         else
             @info "Trade suggestions" tick = tick_time
             for trade in trades
-                @info "Basis signal" node = trade.node basis = trade.basis direction = trade.direction quantity = trade.quantity cvar_95 = trade.cvar_95 expected_pnl = trade.expected_pnl
+                @info "Basis signal" node = trade.node policy = trade.policy basis = trade.basis direction = trade.direction quantity = trade.quantity cvar_95 = trade.cvar_95 expected_pnl = trade.expected_pnl option_value = trade.value_claim_total
             end
             written = persist_risk_log!(DB_PATH, risk_entries)
             @info "Risk log updated" rows = written
