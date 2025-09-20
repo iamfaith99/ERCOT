@@ -62,9 +62,12 @@ function normalize_probs(probs)
         up = Float64(getfield(probs, :up))
         down = Float64(getfield(probs, :down))
     elseif probs isa Dict
-        base = Float64(probs[:base] if haskey(probs, :base) else get(probs, "base", 0.5))
-        up = Float64(probs[:up] if haskey(probs, :up) else get(probs, "up", 0.25))
-        down = Float64(probs[:down] if haskey(probs, :down) else get(probs, "down", 0.25))
+        base_val = haskey(probs, :base) ? probs[:base] : get(probs, "base", 0.5)
+        up_val = haskey(probs, :up) ? probs[:up] : get(probs, "up", 0.25)
+        down_val = haskey(probs, :down) ? probs[:down] : get(probs, "down", 0.25)
+        base = Float64(base_val)
+        up = Float64(up_val)
+        down = Float64(down_val)
     else
         base, up, down = 0.5, 0.25, 0.25
     end
