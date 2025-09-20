@@ -53,6 +53,21 @@ The script keeps manifests keyed by URL + SHA256 to avoid re-downloading files a
 * Add throttling or authentication by editing the helpers at the top of `fetch_and_ingest.jl`.
 * Extend the config with additional EMIL IDs by appending new objects to `datasets.json`.
 
+### Lagged training pipeline (cron / CI)
+
+The lagged web dashboard and RL experiments expect yesterday’s data to be summarized each morning. Chain these jobs after the nightly ingest:
+
+1. **Publish lag snapshot** – records the latest minute and event count in `mart.lag_snapshot_log`.
+   ```
+   5 10 * * * /usr/local/bin/julia /path/to/ercot-pipeline/scripts/publish_lag_snapshot.jl >> /path/to/logs/publish_lag_snapshot.log 2>&1
+   ```
+   Set `LAG_SNAPSHOT_SOURCE` to tag different environments (e.g. `prod`, `staging`).
+2. **Optional automated backtests** – sanity-check the scenario stack via the lagged API.
+   ```
+   15 10 * * * BACKTEST_LIQUIDITY=5.0 /usr/local/bin/julia /path/to/ercot-pipeline/scripts/run_backtests.jl >> /path/to/logs/backtests.log 2>&1
+   ```
+   Override `BACKTEST_DATE`, `BACKTEST_TOP_CONSTRAINTS`, etc. to target specific windows; CI jobs can reuse the same script before deployments.
+
 DuckDB keeps historical tables hot locally, so traders can query spreads, scarcity adders, and contextual drivers from a single file-backed database.
 
 ## Effective PTDF estimation

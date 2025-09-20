@@ -7,6 +7,7 @@ include("EnKF.jl")
 include("LMSRMarket.jl")
 include("AssimilationRunner.jl")
 include("PTDFUtils.jl")
+include("RLTradingEnv.jl")
 
 using .Device: AbstractExecutionDevice, CPUDevice, GPUDevice, detect_device
 using .AssimilationModel: RTCStateModel, build_rtc_state_model, simulate_ensemble, default_state_labels,
@@ -21,9 +22,10 @@ using .AssimilationRunner: analyze_and_forecast!
 using .PTDFUtils: EXTRA_REGRESSORS, EXTRA_REGRESSORS_STR, load_latest_snapshot, load_metadata,
                   model_is_fresh, model_improvement, build_feature_vector, predict_congestion,
                   build_event_graph, upsert_assimilation_events!, scenario_summary,
-                  persist_event_prices!, persist_risk_log!,
+                  persist_event_prices!, persist_risk_log!, ensure_training_tables!, publish_lag_snapshot!,
                   calibrate_scenario_cone, persist_scenario_calibration!,
                   latest_scenario_calibration, what_if
+using .RLTradingEnv: RLTradingEnv, reset!, step!, state, is_done, log_run!, summary
 
 export AbstractExecutionDevice, CPUDevice, GPUDevice,
        detect_device,
@@ -39,8 +41,9 @@ export AbstractExecutionDevice, CPUDevice, GPUDevice,
        EXTRA_REGRESSORS, EXTRA_REGRESSORS_STR, load_latest_snapshot, load_metadata,
        model_is_fresh, model_improvement, build_feature_vector, predict_congestion,
        build_event_graph, upsert_assimilation_events!, scenario_summary,
-       persist_event_prices!, persist_risk_log!,
+       persist_event_prices!, persist_risk_log!, ensure_training_tables!, publish_lag_snapshot!,
        calibrate_scenario_cone, persist_scenario_calibration!,
-       latest_scenario_calibration, what_if
+       latest_scenario_calibration, what_if,
+       RLTradingEnv, reset!, step!, state, is_done, log_run!, summary
 
 end

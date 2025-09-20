@@ -1,0 +1,16 @@
+name = "LaggedWebApp"
+uuid = "c6b51d8f-7fb4-46c6-b35b-5c2c8c85d1cf"
+authors = ["ERCOT Pipeline Developers"]
+version = "0.1.0"
+
+[deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DuckDB = "479239e8-5488-4da2-87a7-35f2df7eef83"
+Genie = "c43c736e-a2d1-11e8-161f-af95117fbd1e"
+JSON3 = "0f8b85d8-7281-11e9-16c4-39a750bddbf1"
+
+[compat]
+DataFrames = "1"
+DuckDB = "0.10"
+Genie = "5"
+JSON3 = "1"

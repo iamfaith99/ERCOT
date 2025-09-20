@@ -150,7 +150,7 @@ function suggest_trades(mu_row, beta_df, intercept_df;
                                :prob_base,:prob_up,:prob_down,
                                :cvar_95,:cvar_per_unit,:expected_pnl,:expected_pnl_per_unit,
                                :risk_budget,:max_quantity,:created_at)}[]
-    graph, priors = build_event_graph(predictions, contributions)
+    graph, priors = build_event_graph(predictions, contributions; logistic_params = Dict{Tuple{String,String},Tuple{Float64,Float64}}(logistic_params))
     _ = PTDF.expand_event_vocabulary!(graph, priors, predictions, contributions;
                                       logistic_params = logistic_params,
                                       fact_row = fact_row,

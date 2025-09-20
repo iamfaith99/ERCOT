@@ -724,6 +724,21 @@ end
 function persist_risk_log!(db_path::AbstractString, entries::Vector{<:NamedTuple})
     isempty(entries) && return 0
     df = DataFrame(entries)
+    desired_order = String[
+        "sced_ts_utc", "node", "hub", "direction", "trade_basis", "quantity",
+        "signed_quantity", "scenario_base", "scenario_up", "scenario_down",
+        "pnl_base", "pnl_up", "pnl_down", "prob_base", "prob_up", "prob_down",
+        "cvar_95", "cvar_per_unit", "expected_pnl", "expected_pnl_per_unit",
+        "risk_budget", "max_quantity", "created_at", "policy", "base_quantity",
+        "policy_weight", "policy_score"
+    ]
+    if all(col -> col in names(df), desired_order)
+        df = select(df, desired_order)
+    else
+        present = filter(col -> col in names(df), desired_order)
+        remaining = setdiff(names(df), present)
+        df = select(df, vcat(present, remaining))
+    end
 
     db = DuckDB.DB(db_path)
     try
@@ -792,6 +807,98 @@ function persist_risk_log!(db_path::AbstractString, entries::Vector{<:NamedTuple
     end
 
     return nrow(df)
+end
+
+function _ensure_snapshot_table!(conn::DuckDB.DB)
+    DuckDB.execute(conn, "CREATE SCHEMA IF NOT EXISTS mart")
+    DuckDB.execute(conn, """
+        CREATE TABLE IF NOT EXISTS mart.lag_snapshot_log (
+            snapshot_date DATE PRIMARY KEY,
+            latest_minute TIMESTAMPTZ,
+            event_records BIGINT,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            source TEXT
+        )
+    """)
+end
+
+function publish_lag_snapshot!(db_path::AbstractString; source::AbstractString = "lagged_webapp")
+    db = DuckDB.DB(db_path)
+    try
+        _ensure_snapshot_table!(db)
+        df = DataFrame(DuckDB.execute(db, """
+            SELECT max(sced_ts_utc_minute) AS latest_minute,
+                   count(*) AS event_records
+            FROM mart.event_price_history
+        """))
+        if isempty(df) || ismissing(df[1, :latest_minute])
+            @warn "No event price history available to publish snapshot"
+            return nothing
+        end
+        latest_minute = df[1, :latest_minute]
+        records = df[1, :event_records]
+        snapshot_date = Date(latest_minute)
+        rows = DataFrame(
+            snapshot_date = [snapshot_date],
+            latest_minute = [latest_minute],
+            event_records = [Int(records)],
+            created_at = [Dates.now(Dates.UTC)],
+            source = [source]
+        )
+        DuckDB.register_data_frame(db, rows, "lag_snapshot_tmp")
+        try
+            DuckDB.execute(db, """
+                INSERT OR REPLACE INTO mart.lag_snapshot_log
+                SELECT snapshot_date, latest_minute, event_records, created_at, source
+                FROM lag_snapshot_tmp
+            """)
+        finally
+            DuckDB.unregister_data_frame(db, "lag_snapshot_tmp")
+        end
+        return snapshot_date, latest_minute, records
+    finally
+        close(db)
+    end
+end
+
+function ensure_training_tables!(db_path::AbstractString)
+    db = DuckDB.DB(db_path)
+    try
+        DuckDB.execute(db, "CREATE SCHEMA IF NOT EXISTS mart")
+        DuckDB.execute(db, """
+            CREATE TABLE IF NOT EXISTS mart.training_runs (
+                run_id TEXT,
+                started_at TIMESTAMPTZ,
+                finished_at TIMESTAMPTZ,
+                snapshot_date DATE,
+                policy TEXT,
+                status TEXT,
+                episodes INTEGER,
+                reward_mean DOUBLE,
+                reward_std DOUBLE,
+                cvar_alpha DOUBLE,
+                hyperparams TEXT,
+                metrics TEXT,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (run_id)
+            )
+        """)
+        DuckDB.execute(db, """
+            CREATE TABLE IF NOT EXISTS mart.training_notes (
+                note_id BIGINT GENERATED ALWAYS AS IDENTITY,
+                run_id TEXT,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                author TEXT,
+                category TEXT,
+                note TEXT,
+                PRIMARY KEY (note_id)
+            )
+        """)
+        DuckDB.execute(db, "CREATE INDEX IF NOT EXISTS training_notes_run_idx ON mart.training_notes(run_id)")
+    finally
+        close(db)
+    end
+    return nothing
 end
 
 function _fetch_top_constraints(db::DuckDB.DB, limit::Int)
