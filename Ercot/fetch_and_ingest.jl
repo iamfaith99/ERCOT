@@ -14,6 +14,7 @@ struct Options
     datasets::Vector{String}
     max_new::Union{Nothing,Int}
     skip_db::Bool
+    manifest_keep::Union{Nothing,Int}
 end
 
 mkpath.( [RAW, STAGE, META, dirname(DBPATH)] )
@@ -46,6 +47,83 @@ function save_manifest(dataset::String, manifest::Dict{String,Any})
     open(path, "w") do io
         JSON3.write(io, manifest; indent=2)
     end
+end
+
+function manifest_entry_paths(info::Dict{String,Any})
+    paths = String[]
+    raw = get(info, "raw", nothing)
+    if raw !== nothing
+        push!(paths, String(raw))
+    end
+    staged = get(info, "staged", nothing)
+    if staged isa AbstractVector
+        for item in staged
+            push!(paths, String(item))
+        end
+    elseif staged !== nothing
+        push!(paths, String(staged))
+    end
+    return paths
+end
+
+function manifest_entry_timestamp(info::Dict{String,Any})
+    if haskey(info, "fetched_at")
+        value = try
+            DateTime(String(info["fetched_at"]))
+        catch
+            nothing
+        end
+        if value !== nothing
+            return Dates.datetime2unix(value)
+        end
+    end
+    best = -Inf
+    for path in manifest_entry_paths(info)
+        if isfile(path)
+            best = max(best, stat(path).mtime)
+        end
+    end
+    return best
+end
+
+function prune_manifest!(manifest::Dict{String,Any}; keep::Union{Nothing,Int}=nothing)
+    files = manifest["files"]::Dict{String,Any}
+    removed_missing = 0
+    for (url, info) in collect(files)
+        staged_paths = String[]
+        if haskey(info, "staged")
+            for item in info["staged"]
+                path = String(item)
+                if isfile(path)
+                    push!(staged_paths, path)
+                end
+            end
+            if isempty(staged_paths)
+                delete!(info, "staged")
+            else
+                info["staged"] = staged_paths
+            end
+        end
+        raw_path = get(info, "raw", nothing)
+        raw_exists = raw_path !== nothing && isfile(String(raw_path))
+        staged_exists = haskey(info, "staged") && !isempty(info["staged"])
+        if !raw_exists && !staged_exists
+            delete!(files, url)
+            removed_missing += 1
+        end
+    end
+
+    trimmed = 0
+    keep === nothing && return (removed_missing=removed_missing, trimmed=trimmed)
+    keep = max(keep, 0)
+    current = length(files)
+    if keep < current
+        entries = collect(files)
+        sort!(entries; by = entry -> manifest_entry_timestamp(entry[2]), rev=true)
+        trimmed = current - keep
+        manifest["files"] = Dict(entries[1:keep])
+    end
+    return (removed_missing=removed_missing, trimmed=trimmed)
 end
 
 function filename_from_url(url::String)
@@ -373,6 +451,7 @@ function parse_args()
     config_path = nothing
     datasets = String[]
     max_new = nothing
+    manifest_keep = nothing
     skip_db = false
     i = 1
     while i <= length(ARGS)
@@ -389,6 +468,14 @@ function parse_args()
             max_new = parse(Int, ARGS[i])
         elseif startswith(arg, "--max-new=")
             max_new = parse(Int, split(arg, "=", limit=2)[2])
+        elseif arg in ("--manifest-keep", "--retain-manifest")
+            i += 1
+            i > length(ARGS) && error("--manifest-keep/--retain-manifest requires an integer value")
+            manifest_keep = parse(Int, ARGS[i])
+        elseif startswith(arg, "--manifest-keep=")
+            manifest_keep = parse(Int, split(arg, "=", limit=2)[2])
+        elseif startswith(arg, "--retain-manifest=")
+            manifest_keep = parse(Int, split(arg, "=", limit=2)[2])
         elseif arg in ("--skip-db", "--download-only")
             skip_db = true
         elseif startswith(arg, "--")
@@ -399,7 +486,7 @@ function parse_args()
         i += 1
     end
     config_path = something(config_path, joinpath(ROOT, "config", "datasets.json"))
-    return Options(config_path, datasets, max_new, skip_db)
+    return Options(config_path, datasets, max_new, skip_db, manifest_keep)
 end
 
 function should_process_dataset(name::String, opts::Options)
@@ -415,7 +502,7 @@ function run_pipeline(opts::Options)
             db = DuckDB.DB(DBPATH)
         catch err
             @warn "Failed to open DuckDB; continuing without ingestion" error=err
-            opts = Options(opts.config_path, opts.datasets, opts.max_new, true)
+            opts = Options(opts.config_path, opts.datasets, opts.max_new, true, opts.manifest_keep)
         end
     end
 
@@ -430,6 +517,10 @@ function run_pipeline(opts::Options)
 
             urls = dataset_urls(entry)
             manifest = load_manifest(name)
+            stats = prune_manifest!(manifest; keep=opts.manifest_keep)
+            if stats.removed_missing > 0 || stats.trimmed > 0
+                @info "Pruned manifest" name removed_missing=stats.removed_missing trimmed=stats.trimmed
+            end
             files = manifest["files"]::Dict{String,Any}
 
             cached = String[]

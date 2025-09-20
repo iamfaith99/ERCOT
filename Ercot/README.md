@@ -33,18 +33,22 @@ Each entry contains the EMIL ID, the MIS detail page to scrape, a regex that sel
 # Activate the Julia environment once
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
-# Run the pipeline (downloads, extracts, ingests)
-julia --project=. fetch_and_ingest.jl
+# Sweep manifests (drop missing files, keep the newest 10k URLs)
+julia --project=. scripts/prune_manifests.jl --keep 10000
 
-# Provide an alternate config if needed
-julia --project=. fetch_and_ingest.jl path/to/custom_config.json
+# Run the pipeline (downloads, extracts, ingests)
+julia --project=. fetch_and_ingest.jl --manifest-keep 10000
+
+# Provide an alternate config or dataset subset if needed
+julia --project=. fetch_and_ingest.jl --manifest-keep 10000 path/to/custom_config.json
 ```
 
 The script keeps manifests keyed by URL + SHA256 to avoid re-downloading files and uses DuckDB's `read_csv_auto(..., union_by_name=TRUE)` to land everything into the `ercot.duckdb` database idempotently.
 
 ## Daily operations
 
-* Schedule via cron: `0 10 * * * /usr/local/bin/julia --project /path/to/ercot-pipeline/fetch_and_ingest.jl >> /path/to/logs/ercot.log 2>&1`
+* Schedule the manifest sweep a few minutes before ingestion: `55 09 * * * /usr/local/bin/julia --project /path/to/ercot-pipeline/scripts/prune_manifests.jl --keep 10000 >> /path/to/logs/prune_manifests.log 2>&1`
+* Then run the fetch with manifest retention and capped downloads: `0 10 * * * /usr/local/bin/julia --project /path/to/ercot-pipeline/fetch_and_ingest.jl --manifest-keep 10000 --max-new 3 >> /path/to/logs/ercot.log 2>&1`
 * After the SCED ingest lands the latest `features.sced_mu` snapshot, run the logistic calibrator nightly to keep `ref.logistic_map_params` current: `30 10 * * * /usr/local/bin/julia --project /path/to/ercot-pipeline/scripts/calibrate_logistics.jl >> /path/to/logs/calibrate_logistics.log 2>&1`
 * Add throttling or authentication by editing the helpers at the top of `fetch_and_ingest.jl`.
 * Extend the config with additional EMIL IDs by appending new objects to `datasets.json`.
