@@ -1,17 +1,15 @@
-module RLTradingEnv
-
-export RLTradingEnv, reset!, step!, state, is_done, log_run!, summary
-
 using Dates
 using Statistics
 using UUIDs
 using JSON3
+using DataFrames
+using DuckDB
 
 import ..PTDFUtils
 import ..PTDFUtils: load_latest_snapshot, build_feature_vector, predict_congestion,
                      build_event_graph, ensure_training_tables!, sanitize_symbol,
                      expand_event_vocabulary!, _load_logistic_params, _fetch_stat_thresholds,
-                     _load_latest_fact_row, _load_actual_node_data, what_if
+                     _load_latest_fact_row, _load_actual_node_data, what_if, _ensure_snapshot_table!
 import ..MarketScoring: initialize_market, state_prices, value_claim
 
 const TRAINING_START_DATE = Date(2025, 8, 18)
@@ -31,7 +29,7 @@ struct NodeScenario
     metadata::Dict{Symbol,Any}
 end
 
-mutable struct RLTradingEnv
+mutable struct TradingEnv
     db_path::String
     date::Date
     hub::String
@@ -138,11 +136,11 @@ function prepare_scenarios(db_path::AbstractString, safe_date::Date, hub::String
     snapshot_ts = mu_row[1, "sced_ts_utc"]
     Date(snapshot_ts) <= safe_date || error("Snapshot $(Date(snapshot_ts)) exceeds allowed training date $(safe_date)")
     feature_values = build_feature_vector(mu_row)
-    logistic_params = PTDFUtils._load_logistic_params(db_path)
-    thresholds = PTDFUtils._fetch_stat_thresholds(db_path)
-    fact_row = PTDFUtils._load_latest_fact_row(db_path)
+    logistic_params = _load_logistic_params(db_path)
+    thresholds = _fetch_stat_thresholds(db_path)
+    fact_row = _load_latest_fact_row(db_path)
     minute_ts = DateTime(mu_row[1, "sced_ts_utc_minute"])
-    price_map, congestion_map = PTDFUtils._load_actual_node_data(db_path, minute_ts)
+    price_map, congestion_map = _load_actual_node_data(db_path, minute_ts)
     nodes_for_eval = unique([target_nodes...; hub])
     predictions, contributions = predict_congestion(beta_df, intercept_df, feature_values;
                                                     nodes_filter = nodes_for_eval,
@@ -222,18 +220,17 @@ function RLTradingEnv(db_path::AbstractString;
                                                              risk_budget = risk_budget,
                                                              max_quantity = max_quantity)
     probs_norm = normalize_probs(scenario_probs)
-    step_index = isempty(scenarios) ? 1 : 1
     log = Dict{Symbol,Any}[]
-    return RLTradingEnv(String(db_path), safe_date, hub, collect(String.(nodes)), scenarios,
-                        snapshot_ts, step_index, risk_aversion, cvar_alpha, probs_norm,
-                        max_quantity, risk_budget, event_prices, log)
+    return TradingEnv(String(db_path), safe_date, hub, collect(String.(nodes)), scenarios,
+                      snapshot_ts, 1, risk_aversion, cvar_alpha, probs_norm,
+                      max_quantity, risk_budget, event_prices, log)
 end
 
-function is_done(env::RLTradingEnv)
+function is_done(env::TradingEnv)
     return env.step_index > length(env.scenarios)
 end
 
-function state(env::RLTradingEnv)
+function state(env::TradingEnv)
     is_done(env) && return nothing
     scenario = env.scenarios[env.step_index]
     return Dict(
@@ -256,13 +253,13 @@ function state(env::RLTradingEnv)
     )
 end
 
-function reset!(env::RLTradingEnv)
+function reset!(env::TradingEnv)
     env.step_index = 1
     empty!(env.log)
     return state(env)
 end
 
-function step!(env::RLTradingEnv, action)
+function step!(env::TradingEnv, action)
     is_done(env) && error("Environment already finished; call reset! first")
     scenario = env.scenarios[env.step_index]
     quantity = action isa NamedTuple ? Float64(action[:quantity]) : Float64(action)
@@ -291,7 +288,7 @@ function step!(env::RLTradingEnv, action)
     return next_state, reward, done, info
 end
 
-function summary(env::RLTradingEnv)
+function summary(env::TradingEnv)
     rewards = [entry[:reward] for entry in env.log]
     expected = [entry[:expected_pnl] for entry in env.log]
     cvar_vals = [entry[:cvar_total] for entry in env.log]
@@ -314,7 +311,7 @@ function summary(env::RLTradingEnv)
     )
 end
 
-function log_run!(env::RLTradingEnv; run_id::Union{Nothing,String}=nothing,
+function log_run!(env::TradingEnv; run_id::Union{Nothing,String}=nothing,
                   status::String = "completed",
                   policy::String = "custom",
                   episodes::Union{Nothing,Int}=nothing,
@@ -339,10 +336,10 @@ function log_run!(env::RLTradingEnv; run_id::Union{Nothing,String}=nothing,
     metrics = summary(env)
     db = DuckDB.DB(env.db_path)
     try
-        _ = PTDFUtils._ensure_snapshot_table!(db)
-    catch
-    end
-    try
+        try
+            _ensure_snapshot_table!(db)
+        catch
+        end
         DuckDB.execute(db, "CREATE SCHEMA IF NOT EXISTS mart")
         run_row = DataFrame(
             run_id = [run_id_val],
@@ -393,6 +390,4 @@ function log_run!(env::RLTradingEnv; run_id::Union{Nothing,String}=nothing,
         close(db)
     end
     return run_id_val
-end
-
 end

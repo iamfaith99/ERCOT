@@ -24,7 +24,9 @@ PIPELINE_PATH in LOAD_PATH || push!(LOAD_PATH, PIPELINE_PATH)
 using ERCOTPipeline
 using ERCOTPipeline: scenario_summary, load_latest_snapshot, build_event_graph,
                      build_feature_vector, predict_congestion,
-                     initialize_market, state_prices, value_claim
+                     initialize_market, state_prices, value_claim,
+                     ensure_training_tables!, RLTradingEnv, reset!, step!, state,
+                     is_done, log_run!
 
 const PTDF = ERCOTPipeline.PTDFUtils
 
@@ -122,7 +124,14 @@ end
 
 with_lagged_date(f::Function) = f(lagged_boundary())
 
-to_string_key_dict(dict::Dict{Symbol,<:Any}) = Dict(string(k) => v for (k, v) in dict)
+function to_string_key_dict(dict)
+    result = Dict{String,Any}()
+    for (k, v) in dict
+        key = String(k)
+        result[key] = v isa Dict ? to_string_key_dict(v) : v isa Vector{<:Dict} ? [to_string_key_dict(x) for x in v] : v
+    end
+    return result
+end
 
 function get_optional_int(body::Dict, key::AbstractString)
     val = get(body, key, nothing)
@@ -225,6 +234,114 @@ end
 
 function convert_event_prices(prices::Dict{Symbol,Float64})
     Dict(string(k) => v for (k, v) in prices)
+end
+
+function convert_log_entries(entries)
+    [Dict(string(k) => v for (k, v) in entry) for entry in entries]
+end
+
+function prepare_notes(raw_notes)
+    if raw_notes isa Vector
+        buf = NamedTuple{(:author,:category,:note),Tuple{String,String,String}}[]
+        for entry in raw_notes
+            author = String(get(entry, "author", get(entry, :author, "")))
+            category = String(get(entry, "category", get(entry, :category, "general")))
+            note = String(get(entry, "note", get(entry, :note, "")))
+            isempty(strip(note)) && continue
+            push!(buf, (author = author, category = category, note = note))
+        end
+        return buf
+    elseif raw_notes isa AbstractString
+        note = strip(String(raw_notes))
+        return isempty(note) ? NamedTuple{(:author,:category,:note),Tuple{String,String,String}}[] : [(author = "", category = "general", note = note)]
+    else
+        return NamedTuple{(:author,:category,:note),Tuple{String,String,String}}[]
+    end
+end
+
+function compute_policy_quantity(state_dict::Dict, policy::String, risk_aversion::Float64,
+                                 temperature::Float64, max_quantity::Float64)
+    dir = Float64(get(state_dict, :direction_sign, 1.0))
+    base_quantity = Float64(get(state_dict, :base_quantity, 0.0))
+    expected_per_unit = Float64(get(state_dict, :expected_per_unit, 0.0))
+    cvar_per_unit = Float64(get(state_dict, :cvar_per_unit, 0.0))
+    policy_score = expected_per_unit - risk_aversion * abs(cvar_per_unit)
+    unsigned_quantity = if lowercase(policy) == "maxent"
+        temp = temperature <= 0 ? 1.0 : temperature
+        weight = 1 / (1 + exp(-policy_score / temp))
+        base_quantity * weight
+    else
+        base_quantity
+    end
+    quantity = dir * unsigned_quantity
+    return clamp(quantity, -max_quantity, max_quantity)
+end
+
+function run_training_job(date::Date; hub::String = "HB_HOUSTON",
+                          target_nodes::Vector{String} = ["HB_WEST", "HB_NORTH"],
+                          top_constraints::Int = 3,
+                          scenario_delta::Float64 = 15.0,
+                          cone_constraints::Int = 2,
+                          scenario_probs = (base = 0.5, up = 0.25, down = 0.25),
+                          cvar_alpha::Float64 = 0.95,
+                          risk_budget::Float64 = 1000.0,
+                          max_quantity::Float64 = 200.0,
+                          risk_aversion::Float64 = 1.0,
+                          policy::String = "cvar",
+                          temperature::Float64 = 50.0,
+                          notes = NamedTuple[])
+    ensure_training_tables!(DB_PATH[])
+    safe_date = clamp_to_lag(date)
+    env = RLTradingEnv(DB_PATH[];
+        date = safe_date,
+        hub = hub,
+        nodes = target_nodes,
+        top_constraints = top_constraints,
+        scenario_delta = scenario_delta,
+        cone_constraints = cone_constraints,
+        scenario_probs = scenario_probs,
+        cvar_alpha = cvar_alpha,
+        risk_budget = risk_budget,
+        max_quantity = max_quantity,
+        risk_aversion = risk_aversion)
+
+    current_state = reset!(env)
+    while current_state !== nothing
+        qty = compute_policy_quantity(current_state, policy, risk_aversion, temperature, max_quantity)
+        current_state, _, done, _ = step!(env, qty)
+        done && break
+    end
+
+    notes_vec = prepare_notes(notes)
+    run_id = log_run!(env; policy = policy, status = "completed", notes = notes_vec)
+    run_summary = to_string_key_dict(ERCOTPipeline.summary(env))
+    probs_norm = env.scenario_probs
+    scenario_probs_dict = Dict(
+        :base => probs_norm.base,
+        :up => probs_norm.up,
+        :down => probs_norm.down
+    )
+    hyperparams = Dict(
+        :date => string(safe_date),
+        :hub => hub,
+        :nodes => target_nodes,
+        :top_constraints => top_constraints,
+        :scenario_delta => scenario_delta,
+        :cone_constraints => cone_constraints,
+        :scenario_probs => scenario_probs_dict,
+        :cvar_alpha => cvar_alpha,
+        :risk_budget => risk_budget,
+        :max_quantity => max_quantity,
+        :risk_aversion => risk_aversion,
+        :policy => policy,
+        :temperature => temperature
+    )
+    return Dict(
+        :run_id => run_id,
+        :summary => run_summary,
+        :log => convert_log_entries(env.log),
+        :hyperparams => to_string_key_dict(hyperparams)
+    )
 end
 
 function fetch_event_price_snapshot(date::Date)
@@ -528,6 +645,55 @@ function setup_routes()
             json(response)
         catch err
             @error "Trade suggestion failed" exception=(err, catch_backtrace())
+            json((status = "error", error = string(err)), status = 500)
+        end
+    end
+
+    route("/api/train", method = POST) do
+        try
+            body = try
+                payload = jsonpayload()
+                payload isa Dict ? payload : Dict{String,Any}()
+            catch
+                Dict{String,Any}()
+            end
+            date = parse_lagged_date(get(body, "date", nothing))
+            hub = get_string(body, "hub", "HB_HOUSTON")
+            raw_nodes = get(body, "nodes", nothing)
+            nodes = raw_nodes === nothing ? ["HB_WEST", "HB_NORTH"] : raw_nodes isa Vector ? String.(raw_nodes) : [String(raw_nodes)]
+            top_constraints = get_int(body, "top_constraints", 3)
+            scenario_delta = get_float(body, "scenario_delta", 15.0)
+            cone_constraints = get_int(body, "cone_constraints", 2)
+            scenario_probs = get(body, "scenario_probs", (base = 0.5, up = 0.25, down = 0.25))
+            cvar_alpha = get_float(body, "cvar_alpha", 0.95)
+            risk_budget = get_float(body, "risk_budget", 1000.0)
+            max_quantity = get_float(body, "max_quantity", 200.0)
+            risk_aversion = get_float(body, "risk_aversion", 1.0)
+            policy = lowercase(get_string(body, "policy", "cvar"))
+            temperature = get_float(body, "temperature", 50.0)
+            notes = get(body, "notes", NamedTuple[])
+            ensure_training_tables!(DB_PATH[])
+            result = run_training_job(date;
+                hub = hub,
+                target_nodes = nodes,
+                top_constraints = top_constraints,
+                scenario_delta = scenario_delta,
+                cone_constraints = cone_constraints,
+                scenario_probs = scenario_probs,
+                cvar_alpha = cvar_alpha,
+                risk_budget = risk_budget,
+                max_quantity = max_quantity,
+                risk_aversion = risk_aversion,
+                policy = policy,
+                temperature = temperature,
+                notes = notes)
+            response = Dict{Symbol,Any}(:status => "ok", :date => string(clamp_to_lag(date)))
+            for (k, v) in result
+                response[k] = v
+            end
+            json(response)
+        catch err
+            @error "Training run failed" exception=(err, catch_backtrace())
             json((status = "error", error = string(err)), status = 500)
         end
     end

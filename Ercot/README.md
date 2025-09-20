@@ -94,6 +94,12 @@ Run `julia scripts/run_ptdf_scenario.jl` to grab the most recent μ snapshot, ap
 - Start the lightweight JSON service: `julia scripts/ptdf_service.jl` (configurable via `PTDF_SERVICE_PORT`/`PTDF_SERVICE_HOST`). Call `GET /scenario?nodes=HB_WEST,HB_HOUSTON&topk=3` to receive predicted prices, top drivers, and LMSR event prices.
 - Drive a 5-minute trading loop prototype: `julia scripts/trading_loop.jl`. The loop checks model freshness/improvement, skips stale ticks, computes basis signals for configured nodes/hub, sizes via simple scenario shocks, and logs trade suggestions (no execution).
 
+### Lagged web dashboard & RL sandbox
+
+- Launch the Genie server: `julia scripts/start_webapp.jl` (override `WEBAPP_HOST`, `WEBAPP_PORT`, or DB settings via env vars). Visit `/dashboard` for a single-page UI that hits `/api/simulate`, `/api/trades`, and `/api/train` against the lagged dataset.
+- The training card wraps `RLTradingEnv`; runs are logged into `mart.training_runs` (with optional notes in `mart.training_notes`). Tweak hyperparameters (risk budget, risk aversion, policy mix, scenario probabilities) from the form or call `/api/train` directly.
+- Batch experiments from the CLI with `julia scripts/train_policy.jl --dates 2025-09-18 --episodes 5 --policy eps --epsilon 0.1`. The script uses the same lagged environment, records runs in DuckDB, and prints a JSON summary for CI assertions.
+
 ## GPU-aware state assimilation prototype
 
 The `src/` directory now contains a small SciML-based prototype that can run on CPU or GPU:

@@ -25,7 +25,6 @@ using .PTDFUtils: EXTRA_REGRESSORS, EXTRA_REGRESSORS_STR, load_latest_snapshot, 
                   persist_event_prices!, persist_risk_log!, ensure_training_tables!, publish_lag_snapshot!,
                   calibrate_scenario_cone, persist_scenario_calibration!,
                   latest_scenario_calibration, what_if
-using .RLTradingEnv: RLTradingEnv, reset!, step!, state, is_done, log_run!, summary
 
 export AbstractExecutionDevice, CPUDevice, GPUDevice,
        detect_device,
@@ -44,6 +43,6 @@ export AbstractExecutionDevice, CPUDevice, GPUDevice,
        persist_event_prices!, persist_risk_log!, ensure_training_tables!, publish_lag_snapshot!,
        calibrate_scenario_cone, persist_scenario_calibration!,
        latest_scenario_calibration, what_if,
-       RLTradingEnv, reset!, step!, state, is_done, log_run!, summary
+       RLTradingEnv, TradingEnv, reset!, step!, state, is_done, log_run!, summary
 
 end
