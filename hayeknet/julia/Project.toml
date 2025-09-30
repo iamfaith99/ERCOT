@@ -1,0 +1,10 @@
+name = "HayekNetJulia"
+uuid = "6f1b1da4-1b09-4bfa-9bf7-7e61c86342d8"
+version = "0.1.0"
+
+[deps]
+EnsembleKalmanProcesses = "aa8a2aa5-91d8-4396-bcef-d4f2ec43552d"
+LightGraphs = "093fc24a-ae57-5d10-9952-331d41423f4d"
+PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
+StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
+
