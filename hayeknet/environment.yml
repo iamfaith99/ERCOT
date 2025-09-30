@@ -1,0 +1,72 @@
+name: hayeknet
+channels:
+  - conda-forge
+  - pytorch
+  - defaults
+dependencies:
+  # Core Python
+  - python=3.13.7
+  - pip
+  
+  # Scientific Computing
+  - numpy>=1.26
+  - scipy>=1.13
+  - pandas>=2.2
+  - matplotlib>=3.9
+  - seaborn
+  - plotly
+  
+  # Machine Learning
+  - pytorch>=2.4
+  - torchvision
+  - torchaudio
+  - scikit-learn
+  - networkx>=3.3
+  - sympy>=1.13
+  
+  # Data Processing
+  - requests>=2.32
+  - lxml
+  - openpyxl
+  - xlrd
+  - h5py
+  - zarr
+  
+  # Jupyter & Development
+  - jupyter
+  - jupyterlab
+  - ipykernel
+  - notebook
+  - ipywidgets
+  
+  # Testing & Quality
+  - pytest
+  - pytest-cov
+  - black
+  - flake8
+  - mypy
+  - pre-commit
+  
+  # Performance
+  - numba
+  - cython
+  
+  # Utilities
+  - tqdm
+  - click
+  - pyyaml
+  - toml
+  - python-dotenv
+  
+  # Julia Integration (via pip)
+  - pip:
+    - juliacall>=0.9
+    - pyiso>=0.4.0
+    - stable-baselines3>=2.3
+    - pymc>=5.15
+    - filterpy>=1.4
+    - gymnasium[classic-control]>=1.0.0
+    - tensorboard
+    - wandb
+    - hydra-core
+    - omegaconf

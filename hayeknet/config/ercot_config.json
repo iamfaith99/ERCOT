@@ -1,0 +1,140 @@
+{
+  "endpoints": {
+    "data_portal_base": "https://data.ercot.com/api/1/",
+    "api_explorer_base": "https://apiexplorer.ercot.com/api/",
+    "mis_reports_base": "https://mis.ercot.com/misapp/GetReports.do",
+    "public_reports_base": "https://www.ercot.com/misapp/servlets/IceDocListJsonWS"
+  },
+  "data_products": {
+    "real_time_lmp": {
+      "emil_id": "np6-788-cd",
+      "name": "LMPs by Resource Nodes, Load Zones and Trading Hubs",
+      "frequency": "5-minute",
+      "format": ["csv", "xml", "zip"],
+      "description": "Real-time locational marginal prices from SCED"
+    },
+    "real_time_load": {
+      "emil_id": "np3-910-er", 
+      "name": "2-Day Real Time Gen and Load Data Reports",
+      "frequency": "hourly",
+      "format": ["csv", "zip"],
+      "description": "System and zonal load data"
+    },
+    "system_lambda": {
+      "emil_id": "np6-905-cd",
+      "name": "Real-Time System Lambda",
+      "frequency": "5-minute", 
+      "format": ["csv", "xml"],
+      "description": "System marginal cost of energy"
+    },
+    "ancillary_prices": {
+      "emil_id": "np6-787-cd",
+      "name": "Real-Time Ancillary Service Prices",
+      "frequency": "hourly",
+      "format": ["csv", "xml"],
+      "description": "Regulation Up/Down, Responsive Reserve, Non-Spinning Reserve prices"
+    },
+    "sced_gen_dispatch": {
+      "emil_id": "np6-323-cd",
+      "name": "SCED Resource Data",
+      "frequency": "5-minute",
+      "format": ["csv", "xml"],
+      "description": "Resource dispatch instructions and telemetry"
+    },
+    "rtc_lmp": {
+      "emil_id": "np6-788-rtc",
+      "name": "RTC Market Trials LMPs",
+      "frequency": "5-minute",
+      "format": ["csv", "xml"],
+      "description": "Real-Time Co-optimization LMPs (when available)"
+    },
+    "dam_lmp": {
+      "emil_id": "np4-180-cd",
+      "name": "Day-Ahead Market Hourly LMPs",
+      "frequency": "hourly",
+      "format": ["csv", "xml"],
+      "description": "Day-ahead locational marginal prices"
+    },
+    "wind_forecast": {
+      "emil_id": "np4-732-cd",
+      "name": "Wind Power Production - Hourly Averaged Actual and Forecasted Values",
+      "frequency": "hourly",
+      "format": ["csv", "xml"],
+      "description": "System-wide wind generation actuals and forecasts"
+    },
+    "solar_forecast": {
+      "emil_id": "np4-745-cd", 
+      "name": "Solar Power Production - Hourly Averaged Actual and Forecasted Values",
+      "frequency": "hourly",
+      "format": ["csv", "xml"],
+      "description": "System-wide solar generation actuals and forecasts"
+    }
+  },
+  "schema_mappings": {
+    "lmp_fields": {
+      "DeliveryDate": "delivery_date",
+      "DeliveryHour": "delivery_hour",
+      "DeliveryInterval": "delivery_interval", 
+      "SettlementPoint": "settlement_point",
+      "SettlementPointName": "settlement_point_name",
+      "SettlementPointType": "settlement_point_type",
+      "LMP": "lmp_usd",
+      "EnergyComponent": "energy_component",
+      "CongestionComponent": "congestion_component",
+      "LossComponent": "loss_component"
+    },
+    "load_fields": {
+      "OperDay": "oper_day",
+      "HourEnding": "hour_ending",
+      "COAST": "coast_load_mw",
+      "EAST": "east_load_mw",
+      "FWEST": "far_west_load_mw", 
+      "NORTH": "north_load_mw",
+      "NCENT": "north_central_load_mw",
+      "SOUTH": "south_load_mw",
+      "SCENT": "south_central_load_mw",
+      "WEST": "west_load_mw",
+      "ERCOT": "total_load_mw"
+    },
+    "ancillary_fields": {
+      "DeliveryDate": "delivery_date",
+      "HourEnding": "hour_ending",
+      "AncillaryType": "ancillary_type",
+      "MCPC": "market_clearing_price"
+    }
+  },
+  "settlement_points": {
+    "major_hubs": [
+      "HB_HOUSTON",
+      "HB_NORTH", 
+      "HB_SOUTH",
+      "HB_WEST"
+    ],
+    "load_zones": [
+      "LZ_AEN",
+      "LZ_CPS", 
+      "LZ_HOUSTON",
+      "LZ_LCRA",
+      "LZ_NORTH",
+      "LZ_RAYBN",
+      "LZ_SOUTH",
+      "LZ_WEST"
+    ]
+  },
+  "api_settings": {
+    "timeout_seconds": 30,
+    "max_retries": 3,
+    "rate_limit_delay": 1.0,
+    "default_lookback_hours": 24,
+    "max_records_per_request": 10000
+  },
+  "data_quality": {
+    "missing_data_threshold": 0.05,
+    "outlier_detection": {
+      "lmp_min": -500,
+      "lmp_max": 9000,
+      "load_min": 20000,
+      "load_max": 85000
+    }
+  }
+}

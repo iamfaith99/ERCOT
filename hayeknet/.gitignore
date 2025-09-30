@@ -1,0 +1,82 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.ipynb_checkpoints/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Julia
+.julia_depot/
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+
+# Data files (PRIVATE - Do not commit)
+data/archive/**
+data/raw/**
+data/processed/**
+data/cache/**
+data/reports/**
+data/logs/**
+*.pkl
+*.parquet
+*.csv
+*.zip
+
+# Research outputs (PRIVATE - Do not commit your actual observations)
+research/journal/journal_*.md
+research/observations/observation_*.md
+research/observations/week_ending_*.md
+research/results/results_*.json
+research/RESEARCH_PROGRESS.md
+
+# Model checkpoints and training data
+models/*.pth
+models/*.h5
+models/*.pkl
+runs/**
+
+# Logs
+logs/**
+*.log
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Environment files with secrets
+.env
+.env.local
+*.key
+*.pem
+
+# Large binary files
+*.npy
+*.npz
+
+# Temporary files
+tmp/
+temp/
+*.tmp
