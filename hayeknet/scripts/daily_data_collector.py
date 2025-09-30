@@ -9,7 +9,6 @@ This script runs daily to:
 
 Designed to be run via cron or scheduled task.
 """
-from __future__ import annotations
 
 import sys
 import json

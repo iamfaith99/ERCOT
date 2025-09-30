@@ -7,11 +7,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, List
-import json
+from typing import Dict, Any
 
 import pandas as pd
-import numpy as np
 
 
 class ResearchObservationTracker:

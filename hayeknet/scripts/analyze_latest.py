@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Generate analysis report for the latest simulation run."""
-from __future__ import annotations
 
 from pathlib import Path
 

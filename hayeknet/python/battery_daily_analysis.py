@@ -6,15 +6,13 @@ for the daily research workflow.
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
 from typing import Dict, Any
 
-import numpy as np
 import pandas as pd
 
-from python.battery_model import BatterySimulator, BatterySpecs, BatteryState
+from python.battery_model import BatterySimulator, BatterySpecs
 from python.battery_strategy import SimpleArbitrageStrategy
-from python.market_simulator import MarketDesign, BidDecision
+from python.market_simulator import MarketDesign
 
 
 class BatteryDailyAnalyzer:

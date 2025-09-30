@@ -419,7 +419,7 @@ If you use this research framework in your work, please cite:
 
 ```bibtex
 @software{hayeknet2025,
-  author = {Weldon},
+  author = {Antoine III, Weldon T.},
   title = {HayekNet: Battery Trading Research Platform for ERCOT Markets},
   year = {2025},
   url = {https://github.com/iamfaith99/ERCOT},
@@ -431,7 +431,7 @@ If you use this research framework in your work, please cite:
 
 ## 📧 Contact & Collaboration
 
-**Author**: Weldon  
+**Author**: Weldon T. Antoine III  
 **Project**: Graduate Research in Energy Systems & Computational Finance  
 **Duration**: September - December 2025  
 **Institution**: Graduate Studies  

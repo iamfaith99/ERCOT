@@ -6,18 +6,16 @@ Research Question:
 How would ERCOT battery trading strategies differ under today's market rules 
 versus the upcoming RTC+B framework?
 """
-from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import seaborn as sns
 
 from python.battery_data import BatteryDataClient
-from python.battery_model import BatterySimulator, BatterySpecs
+from python.battery_model import BatterySpecs
 from python.market_simulator import compare_market_designs
 
 

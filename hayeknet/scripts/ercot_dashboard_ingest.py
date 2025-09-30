@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
 """Scheduled ERCOT dashboard ingestion utility."""
 
-from __future__ import annotations
-
 import argparse
 import logging
 import sys
 import time
 from pathlib import Path
 from typing import Optional
-
-import pandas as pd
 
 # Ensure project root is on path for package imports
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

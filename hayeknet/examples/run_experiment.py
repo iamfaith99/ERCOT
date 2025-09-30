@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
 """Example: Run a complete HayekNet experiment with multiple configurations."""
-from __future__ import annotations
 
 from pathlib import Path
 from typing import List
 
-import numpy as np
-
 from python.main_with_analysis import run_simulation
 from python.analysis import compare_runs
-from python.results import ResultsReader
 
 
 def run_ensemble_size_experiment() -> List[str]:

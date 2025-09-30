@@ -12,11 +12,9 @@ Usage:
     python scripts/daily_research_workflow.py --no-data-fetch  # Skip data fetch
     python scripts/daily_research_workflow.py --quick          # Quick test run
 """
-from __future__ import annotations
-
 import sys
 import argparse
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 import json
 

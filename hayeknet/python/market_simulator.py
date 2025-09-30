@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Tuple
 
-import numpy as np
 import pandas as pd
 
 from python.battery_model import BatterySimulator, BatterySpecs

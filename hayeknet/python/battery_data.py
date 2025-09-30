@@ -1,14 +1,12 @@
 """Enhanced ERCOT data client for battery trading analysis with historical data."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import requests
 
 from python.data import ERCOTDataClient
 

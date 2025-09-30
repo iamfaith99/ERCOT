@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from urllib.parse import urljoin
 
 import numpy as np
 import pandas as pd

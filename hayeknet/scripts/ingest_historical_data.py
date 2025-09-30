@@ -9,11 +9,9 @@ Usage:
     python scripts/ingest_historical_data.py --list-reports
     python scripts/ingest_historical_data.py --clear-cache
 """
-from __future__ import annotations
-
 import argparse
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 # Add parent directory to path for imports
