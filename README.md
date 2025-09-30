@@ -39,7 +39,7 @@ A hybrid Python-Julia platform for simulating and optimizing 100MW/400MWh batter
 - **Production Pipeline**: Automated ETL processing 300K+ daily records
 - **Clean Architecture**: Modular Python packages with clear separation of concerns
 - **Version Control**: Git workflow with comprehensive .gitignore for data privacy
-- **Testing**: Unit tests, integration tests, and validation scripts
+- **Code Quality**: Validation scripts and systematic testing workflow
 - **Documentation**: Professional technical writing for code and research
 
 ### Data Science & ML
@@ -56,9 +56,9 @@ A hybrid Python-Julia platform for simulating and optimizing 100MW/400MWh batter
 - **Quantitative Finance**: Option pricing, risk management, portfolio theory
 
 ### Technical Stack
-- **Languages**: Python 3.13, Julia 1.11, SQL, Bash
+- **Languages**: Python 3.13, Julia 1.11, Bash
 - **ML/Stats**: PyMC, Stable-Baselines3, scikit-learn, scipy
-- **Data**: pandas, numpy, DuckDB, Parquet
+- **Data**: pandas, numpy, pickle for caching
 - **High-Performance**: Julia for numerical computing (10x Python speedup)
 - **DevOps**: Conda environments, Makefiles, automated workflows
 
@@ -177,8 +177,7 @@ ERCOT/
 │   │
 │   ├── docs/                      # Research documentation
 │   │   ├── Proposal.md            # Research proposal
-│   │   ├── Research paper outline.md   # Paper structure
-│   │   └── RESEARCH_ALIGNMENT_ASSESSMENT.md
+│   │   └── Research paper outline.md   # Paper structure
 │   │
 │   ├── data/                      # Data storage (local only)
 │   │   ├── archive/               # Historical LMP data
@@ -297,13 +296,7 @@ Battery: 100 MW / 400 MWh
 ### Research Documentation
 - **`docs/Proposal.md`** - Research proposal
 - **`docs/Research paper outline.md`** - Paper structure
-- **`docs/RESEARCH_ALIGNMENT_ASSESSMENT.md`** - Capability assessment
-- **`WEEK1_ACTION_PLAN.md`** - Week 1 tasks
-
-### Technical Documentation
-- **`docs/ERCOT_DATA_CLIENT.md`** - Data client guide
-- **`docs/BATTERY_ANALYSIS_README.md`** - Battery analysis guide
-- **`docs/ANALYSIS_README.md`** - Results analysis guide
+- **`WEEK1_ACTION_PLAN.md`** - Week 1 action plan
 
 ---
 

@@ -31,7 +31,7 @@ On December 5, 2025, ERCOT will implement Real-Time Co-Optimization plus Batteri
 ### Data & Tools
 
 * **ERCOT MIS reports** for validation of prices and settlement rules.
-* **Coding languages:** Julia (primary) and Python (secondary).
+* **Coding languages:** Julia and Python.
 
 ---
 

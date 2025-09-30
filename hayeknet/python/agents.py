@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Tuple
+from typing import Tuple
 
 # Import juliacall FIRST to prevent segfaults with torch
 try:
