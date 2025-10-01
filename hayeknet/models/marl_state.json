@@ -1,0 +1,35 @@
+{
+  "agents": {
+    "battery": {
+      "capacity_mw": 100.0,
+      "beliefs": {
+        "price_high_prob": 0.3,
+        "imbalance_prob": 0.1,
+        "congestion_prob": 0.05,
+        "volatility_state": 0.2
+      },
+      "training_history": []
+    },
+    "solar": {
+      "capacity_mw": 200.0,
+      "beliefs": {
+        "price_high_prob": 0.3,
+        "imbalance_prob": 0.1,
+        "congestion_prob": 0.05,
+        "volatility_state": 0.2
+      },
+      "training_history": []
+    },
+    "wind": {
+      "capacity_mw": 150.0,
+      "beliefs": {
+        "price_high_prob": 0.3,
+        "imbalance_prob": 0.1,
+        "congestion_prob": 0.05,
+        "volatility_state": 0.2
+      },
+      "training_history": []
+    }
+  },
+  "model_dir": "/Users/weldon/Documents/ERCOT/hayeknet/models/qse_agents"
+}

@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from python.data import ERCOTDataClient
 from python.battery_daily_analysis import run_battery_daily_analysis
 from python.research_observations import ResearchObservationTracker
+from python.qse_agents import MARLSystem, ResourceType
 
 
 def setup_directories():
@@ -131,17 +132,69 @@ def run_hayeknet_system(df: pd.DataFrame, quick: bool = False) -> dict:
         'status': 'success'
     }
     
-    # Component 3: Reinforcement Learning
-    print("🤖 Component 3/8: Reinforcement Learning")
-    # Simple policy: bid more when LMP is rising
+    # Component 3: Multi-Agent Reinforcement Learning
+    print("🤖 Component 3/8: Multi-Agent Reinforcement Learning")
+    
+    # Initialize or load MARL system
+    base_dir = Path(__file__).resolve().parents[1]
+    marl_system = MARLSystem(model_dir=base_dir / 'models' / 'qse_agents')
+    marl_state_file = base_dir / 'models' / 'marl_state.json'
+    
+    if marl_state_file.exists():
+        marl_system.load_state(marl_state_file)
+        print("   📂 Loaded existing MARL agents")
+    else:
+        print("   🆕 Initialized new MARL agents")
+    
+    # Train incrementally on all historical data
+    data_dir = base_dir / 'data' / 'archive' / 'ercot_lmp'
+    parquet_files = list(data_dir.glob('ercot_lmp_*.parquet'))
+    
+    if parquet_files and not quick:
+        print("   🔄 Training agents on historical data...")
+        try:
+            training_metrics = marl_system.train_incremental(
+                data_dir=data_dir,
+                timesteps_per_day=5000 if quick else 10000,
+                save_checkpoints=True
+            )
+            print(f"   ✅ Training complete for {len(training_metrics)} agents")
+        except Exception as e:
+            print(f"   ⚠️  Training failed: {e}")
+            print("   Using heuristic policies instead")
+    
+    # Generate bids from trained agents
+    recent_lmp_df = hubs.groupby('timestamp').agg({'lmp_usd': 'mean'}).reset_index()
+    recent_lmp_df.columns = ['timestamp', 'LMP']
+    
+    try:
+        bids = marl_system.generate_bids(recent_lmp_df)
+        print("   📊 Agent bids:")
+        for resource_type, bid_info in bids.items():
+            print(f"      {resource_type.value}: {bid_info['quantity_mw']:.2f} MW @ ${bid_info['price_bid']:.2f}/MWh ({bid_info['method']})")
+        
+        # Use battery bid as main suggestion
+        if ResourceType.BATTERY in bids:
+            bid_suggestion = bids[ResourceType.BATTERY]['quantity_mw'] / 100.0  # Normalize to [0,1]
+        else:
+            bid_suggestion = 0.5
+    except Exception as e:
+        print(f"   ⚠️  Bid generation failed: {e}")
+        lmp_trend = system_lmp.diff().mean()
+        bid_suggestion = 0.5 + (lmp_trend / 10)
+        bid_suggestion = max(0.1, min(bid_suggestion, 1.0))
+        bids = {}
+    
+    # Save MARL state
+    marl_system.save_state(marl_state_file)
+    
+    # Calculate LMP trend for trading signal (Component 8)
     lmp_trend = system_lmp.diff().mean()
-    bid_suggestion = 0.5 + (lmp_trend / 10)  # Simple heuristic
-    bid_suggestion = max(0.1, min(bid_suggestion, 1.0))  # Clip to [0.1, 1.0] MW
-    print(f"   LMP trend: {lmp_trend:+.2f}/MWh per interval")
-    print(f"   Bid suggestion: {bid_suggestion:.2f} MW")
+    
     results['components']['reinforcement_learning'] = {
+        'agents': {k.value: v for k, v in bids.items()},
+        'primary_bid_mw': round(bid_suggestion, 2),
         'lmp_trend': round(lmp_trend, 2),
-        'bid_mw': round(bid_suggestion, 2),
         'status': 'success'
     }
     
