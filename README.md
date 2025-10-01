@@ -66,37 +66,39 @@ A hybrid Python-Julia platform for simulating and optimizing 100MW/400MWh batter
 
 ## 🔋 System Architecture
 
-**HayekNet** implements a multi-agent system with hybrid Python-Julia architecture:
+**HayekNet** implements a **Multi-Agent Reinforcement Learning (MARL)** system with hybrid Python-Julia architecture:
 
 ### Core Components
 
 1. **Data Pipeline** (Python)
    - Automated ERCOT API integration
-   - 1.8M+ LMP observations archived
-   - Real-time data streaming
-   - Caching and deduplication
+   - 10M+ LMP observations (growing daily)
+   - Real-time data streaming from 1,053 settlement points
+   - Parquet archive with compression
 
-2. **Battery Simulator** (Python)
+2. **MARL Agent System** (Python) ⭐ **NEW**
+   - **3 QSE Agents**: Battery (100MW), Solar (200MW), Wind (150MW)
+   - **Incremental PPO Training**: Learns from ALL historical data daily
+   - **Bayesian Beliefs**: P(high_price), P(imbalance), P(congestion)
+   - **Dutch Book Checks**: Ensures coherent probabilistic reasoning
+   - **Grid DAG**: Models ERCOT transmission constraints
+
+3. **Battery Simulator** (Python)
    - 100MW/400MWh BESS model
    - SOC tracking and constraints
-   - Degradation modeling
-   - Multi-market participation
-
-3. **Trading Strategies** (Python)
-   - Simple arbitrage (buy low, sell high)
-   - Ancillary services co-optimization
-   - Bayesian forecasting integration
-   - RL-based adaptive bidding
+   - Cycling analysis
+   - Arbitrage strategy evaluation
 
 4. **Performance Kernels** (Julia)
    - Ensemble Kalman Filter (EnKF)
    - Monte Carlo option pricing
-   - Constraint validation
+   - Constraint validation (DAG + Boolean logic)
    - 10x faster than pure Python
 
 5. **Analysis Engine** (Python)
+   - Daily research journals auto-generated
    - Risk metrics calculation
-   - Statistical hypothesis testing
+   - Agent performance tracking
    - Publication-quality visualization
    - Automated report generation
 

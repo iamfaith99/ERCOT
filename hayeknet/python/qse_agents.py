@@ -376,7 +376,18 @@ class MARLSystem:
             dfs.append(df)
         
         combined = pd.concat(dfs, ignore_index=True)
-        combined = combined.sort_values('DeliveryDate').reset_index(drop=True)
+        
+        # Sort by timestamp column (handle different possible names)
+        time_col = None
+        for col in ['timestamp', 'DeliveryDate', 'SCEDTimestamp']:
+            if col in combined.columns:
+                time_col = col
+                break
+        
+        if time_col:
+            combined = combined.sort_values(time_col).reset_index(drop=True)
+        else:
+            combined = combined.reset_index(drop=True)
         
         return combined
     
@@ -411,8 +422,20 @@ class MARLSystem:
         # Load all available historical data
         self.training_data = self.load_historical_data(data_dir)
         
+        # Standardize column names for training
+        if 'lmp_usd' in self.training_data.columns and 'LMP' not in self.training_data.columns:
+            self.training_data['LMP'] = self.training_data['lmp_usd']
+        
+        # Get time column for reporting
+        time_col = None
+        for col in ['timestamp', 'DeliveryDate', 'SCEDTimestamp']:
+            if col in self.training_data.columns:
+                time_col = col
+                break
+        
         print(f"📊 Loaded {len(self.training_data):,} observations for training")
-        print(f"   Date range: {self.training_data['DeliveryDate'].min()} to {self.training_data['DeliveryDate'].max()}")
+        if time_col:
+            print(f"   Date range: {self.training_data[time_col].min()} to {self.training_data[time_col].max()}")
         
         metrics = {}
         
