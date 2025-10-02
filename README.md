@@ -6,7 +6,7 @@
 [![Julia 1.11+](https://img.shields.io/badge/julia-1.11+-purple.svg)](https://julialang.org/)
 [![License: Academic](https://img.shields.io/badge/license-Academic-green.svg)](LICENSE)
 
-**Graduate Research Project** | October 1 - December 6, 2025 (67 days)  
+**Graduate Research Project** | October 1 - December 5, 2025 (65 days)
 **Focus**: Battery Energy Storage System (BESS) bidding strategies for ERCOT's Real-Time Co-Optimization (RTC+B) market  
 **Status**: ✅ Day 2 Active | **🆕 AI Q&A System LIVE** | Automated collection @ 1:00 AM MT
 
@@ -22,7 +22,7 @@ A hybrid Python-Julia platform for simulating and optimizing 100MW/400MWh batter
 
 - **Asset Optimization**: Maximize revenue from grid-scale battery systems ($M+ annual potential)
 - **Market Readiness**: Prepare for ERCOT's RTC+B launch (December 2025)
-- **Data-Driven Strategy**: 67-day quantitative study with statistical rigor
+- **Data-Driven Strategy**: 65-day quantitative study with statistical rigor
 - **Risk Management**: Comprehensive risk metrics (VaR, CVaR, Sharpe ratio)
 
 ### Technical Innovation
@@ -269,7 +269,7 @@ ERCOT/
 
 ## 🎓 Research Outputs
 
-### Daily Outputs (67 days → Dec 5)
+### Daily Outputs (65 days → Dec 5)
 
 **Quantitative Data**:
 - Battery performance metrics (PnL, SOC, cycles)
@@ -283,14 +283,14 @@ ERCOT/
 - Strategy observations
 - Research insights for thesis
 
-### By December 6, 2025 (Study End)
+### By December 5, 2025 (Study End)
 
-- **67 days** of battery simulations (Oct 1 - Dec 6)
-- **19,296 trading intervals** analyzed (288 per day)
-- **~20.3M market observations** collected (303K per day)
+- **65 days** of battery simulations (Oct 1 - Dec 5)
+- **18,720 trading intervals** analyzed (288 per day)
+- **~19.7M market observations** collected (303K per day)
 - **Complete dataset** for thesis Results chapter
 - **Accumulated insights** for Discussion chapter
-- **Trained MARL agents** with 67 days of learning evolution
+- **Trained MARL agents** with 65 days of learning evolution
 
 ---
 
@@ -388,9 +388,9 @@ Battery: 100 MW / 400 MWh
 ## 📈 Project Outcomes & Deliverables
 
 ### Quantitative Results
-- **Data Processed**: 1.8M+ market observations (growing to ~2M by Dec 5)
-- **Trading Intervals**: 19,000+ simulation time steps
-- **Battery Cycles**: Tracked across 67 days of operation
+- **Data Processed**: 1.8M+ market observations (growing to ~19.7M by Dec 5)
+- **Trading Intervals**: 18,720 simulation time steps
+- **Battery Cycles**: Tracked across 65 days of operation
 - **Performance Metrics**: 20+ KPIs calculated daily (PnL, SOC, utilization)
 - **Statistical Rigor**: Hypothesis testing with p-values and confidence intervals
 
@@ -408,7 +408,7 @@ Battery: 100 MW / 400 MWh
 - **Reproducible Methods**: Open framework for energy storage research
 
 ### Professional Development
-- **Project Management**: 67-day research project with clear milestones
+- **Project Management**: 65-day research project with clear milestones
 - **Technical Writing**: Research proposal, documentation, and thesis
 - **Stakeholder Communication**: Academic advisors and industry partners
 - **Independent Research**: Self-directed investigation with regular deliverables
@@ -440,7 +440,7 @@ This repository represents a complete graduate-level research project demonstrat
 - ✅ Daily workflow running (1:00 AM MT)
 - ✅ Data collection automated
 - ✅ MARL agents implemented
-- ✅ Study period: Oct 1 - Dec 6, 2025
+- ✅ Study period: Oct 1 - Dec 5, 2025
 
 **Phase 2** (Oct 1 - Nov 15): Data Collection & Agent Training (46 days)
 - ✅ Automated nightly data ingestion (1:00 AM MT)
@@ -456,8 +456,8 @@ This repository represents a complete graduate-level research project demonstrat
 - Statistical analysis
 - Results generation
 
-**Phase 4** (Dec 1 - Dec 6): Final Collection & Thesis Writing (6 days)
-- Complete 67-day data collection (Dec 6)
+**Phase 4** (Dec 1 - Dec 5): Final Collection & Thesis Writing (5 days)
+- Complete 65-day data collection (Dec 5)
 - Compile results
 - Generate figures
 - Write thesis
@@ -546,8 +546,8 @@ MIT License - Academic and research use encouraged. Market data sourced from ERC
 **Project Status**: ✅ Day 2 Active (Oct 2, 2025) | **🔥 AI Q&A BREAKTHROUGH**  
 **Data Pipeline**: ✅ Fully Automated (1:00 AM MT nightly)  
 **AI Research System**: ✅ **PROVEN WORKING** - 9 questions answered with 60% avg confidence  
-**Research Phase**: Data Collection & MARL Training (67-day study)  
-**Study Period**: October 1 - December 6, 2025  
+**Research Phase**: Data Collection & MARL Training (65-day study)  
+**Study Period**: October 1 - December 5, 2025
 **MARL Agents**: ✅ Training incrementally on 197,964+ historical observations
 
 ---
