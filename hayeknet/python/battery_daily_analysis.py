@@ -13,6 +13,7 @@ import pandas as pd
 
 from python.battery_model import BatterySimulator, BatterySpecs
 from python.battery_strategy import SimpleArbitrageStrategy
+from python.battery_data import BatteryDataClient
 from python.market_simulator import MarketDesign
 
 
@@ -90,14 +91,32 @@ class BatteryDailyAnalyzer:
             timestamp = row['timestamp']
             lmp = row['lmp_usd']
             
-            # Generate bid decision
-            market_data = pd.Series({
+            # Generate bid decision using real market data
+            market_data_dict = {
                 'timestamp': timestamp,
-                'lmp': lmp,
-                'reg_up_mcpc': lmp * 0.5,  # Simplified: assume AS prices
-                'reg_down_mcpc': lmp * 0.3,
-                'rrs_mcpc': lmp * 0.4,
-            })
+                'lmp_usd': lmp,
+            }
+            
+            # Add real ancillary service prices if available
+            if 'reg_up_price' in row:
+                market_data_dict['reg_up_price'] = row.get('reg_up_price', lmp * 0.5)
+                market_data_dict['reg_down_price'] = row.get('reg_down_price', lmp * 0.3)
+                market_data_dict['rrs_price'] = row.get('rrs_price', lmp * 0.4)
+                market_data_dict['ecrs_price'] = row.get('ecrs_price', lmp * 0.35)
+            else:
+                # Fallback to estimated AS prices
+                market_data_dict['reg_up_price'] = lmp * 0.5
+                market_data_dict['reg_down_price'] = lmp * 0.3
+                market_data_dict['rrs_price'] = lmp * 0.4
+                market_data_dict['ecrs_price'] = lmp * 0.35
+            
+            # Add other market data if available
+            if 'net_load_mw' in row:
+                market_data_dict['net_load_mw'] = row['net_load_mw']
+            if 'data_source' in row:
+                market_data_dict['data_source'] = row['data_source']
+            
+            market_data = pd.Series(market_data_dict)
             
             bid = self.strategy.generate_bid(
                 battery=self.simulator,
@@ -246,6 +265,19 @@ class BatteryDailyAnalyzer:
         lmp_min = lmp_data['lmp_usd'].min()
         lmp_max = lmp_data['lmp_usd'].max()
         
+        # Data source analysis
+        has_real_as = any(col in lmp_data.columns for col in ['reg_up_price', 'reg_down_price'])
+        data_sources = lmp_data.get('data_source', pd.Series(['unknown'] * len(lmp_data))).value_counts()
+        primary_source = data_sources.index[0] if not data_sources.empty else 'unknown'
+        
+        # Ancillary service price analysis
+        as_summary = "Not available (using estimated prices)"
+        if has_real_as:
+            reg_up_mean = lmp_data.get('reg_up_price', pd.Series([0])).mean()
+            reg_down_mean = lmp_data.get('reg_down_price', pd.Series([0])).mean()
+            rrs_mean = lmp_data.get('rrs_price', pd.Series([0])).mean()
+            as_summary = f"RegUp: ${reg_up_mean:.1f}, RegDown: ${reg_down_mean:.1f}, RRS: ${rrs_mean:.1f} $/MW"
+        
         journal = f"""
 ---
 
@@ -261,6 +293,8 @@ class BatteryDailyAnalyzer:
 - **LMP Volatility**: ${lmp_std:.2f}/MWh (CoV: {lmp_std/lmp_mean*100:.1f}%)
 - **Price Range**: ${lmp_min:.2f} - ${lmp_max:.2f}/MWh
 - **Observations**: {len(lmp_data):,} intervals
+- **Data Source**: {primary_source} ({len(data_sources)} sources)
+- **Ancillary Services**: {as_summary}
 
 ### State of Charge (SOC) Performance
 - **Mean SOC**: {metrics['soc_mean']*100:.1f}%
@@ -328,14 +362,57 @@ class BatteryDailyAnalyzer:
         return journal
 
 
-def run_battery_daily_analysis(lmp_data: pd.DataFrame) -> tuple[Dict[str, Any], Dict[str, Any], str]:
+def load_multi_source_battery_data(
+    start_date: datetime | None = None,
+    end_date: datetime | None = None
+) -> pd.DataFrame:
     """
-    Run complete battery daily analysis.
+    Load multi-source ERCOT data optimized for battery analysis.
     
     Parameters
     ----------
-    lmp_data : pd.DataFrame
-        LMP data with timestamp, lmp_usd, settlement_point columns
+    start_date : datetime, optional
+        Start date for data (default: yesterday)
+    end_date : datetime, optional
+        End date for data (default: today)
+        
+    Returns
+    -------
+    pd.DataFrame
+        Combined multi-source data with LMP and ancillary prices
+    """
+    from datetime import timedelta
+    
+    if start_date is None:
+        start_date = datetime.now() - timedelta(days=1)
+    if end_date is None:
+        end_date = datetime.now()
+    
+    # Initialize BatteryDataClient with ancillary services enabled
+    client = BatteryDataClient(include_ancillary=True)
+    
+    # Fetch multi-source historical data
+    data = client.fetch_historical_rtc_data(start_date, end_date)
+    
+    return data
+
+
+def run_battery_daily_analysis(
+    lmp_data: pd.DataFrame | None = None, 
+    start_date: datetime | None = None,
+    end_date: datetime | None = None
+) -> tuple[Dict[str, Any], Dict[str, Any], str]:
+    """
+    Run complete battery daily analysis with multi-source data.
+    
+    Parameters
+    ----------
+    lmp_data : pd.DataFrame, optional
+        LMP data with timestamp, lmp_usd columns. If None, loads from archives.
+    start_date : datetime, optional
+        Start date for analysis if loading data
+    end_date : datetime, optional  
+        End date for analysis if loading data
         
     Returns
     -------
@@ -345,6 +422,16 @@ def run_battery_daily_analysis(lmp_data: pd.DataFrame) -> tuple[Dict[str, Any], 
         journal_section : str - Markdown journal text
     """
     analyzer = BatteryDailyAnalyzer()
+    
+    # Load data if not provided
+    if lmp_data is None:
+        print("📂 Loading multi-source data for battery analysis...")
+        lmp_data = load_multi_source_battery_data(start_date, end_date)
+        
+        if lmp_data.empty:
+            raise ValueError("No data available for the specified date range")
+        
+        print(f"✅ Loaded {len(lmp_data)} observations from multi-source archive")
     
     # Run simulation
     results = analyzer.run_arbitrage_simulation(lmp_data, market_design=MarketDesign.SCED)

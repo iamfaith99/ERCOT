@@ -54,22 +54,137 @@ class BatteryDataClient(ERCOTDataClient):
             
         print(f"📅 Fetching historical data: {start_date.date()} to {end_date.date()}")
         
-        # Try to fetch real data first
-        df = self._fetch_historical_dashboard_data(start_date, end_date)
+        # Try multi-source archived data first
+        df = self._fetch_archived_multi_source_data(start_date, end_date)
+        
+        # If archived data fails, try real-time data
+        if df.empty:
+            df = self._fetch_historical_dashboard_data(start_date, end_date)
         
         # If real data fails, generate synthetic
         if df.empty:
             print("⚠️  Real data unavailable, generating synthetic historical data")
             df = self._generate_historical_synthetic(start_date, end_date)
         
-        # Add ancillary service prices
-        if self.include_ancillary:
+        # Add ancillary service prices if not already present
+        if self.include_ancillary and 'reg_up_price' not in df.columns:
             df = self._add_ancillary_prices(df)
         
         # Add derived metrics for battery analysis
         df = self._add_battery_signals(df)
         
         return df.sort_values("timestamp").reset_index(drop=True)
+    
+    def _fetch_archived_multi_source_data(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> pd.DataFrame:
+        """
+        Fetch archived multi-source ERCOT data from the enhanced daily collector.
+        
+        Looks for data in the multi-source archive created by the enhanced
+        daily data collector, which combines real-time LMP, DAM, system lambda,
+        and ancillary service prices.
+        """
+        from pathlib import Path
+        import glob
+        
+        # Path to multi-source archived data
+        project_root = Path(__file__).resolve().parents[1]
+        archive_base = project_root / "data" / "archive"
+        
+        dfs = []
+        
+        # Look for archived parquet files in date range
+        current_date = start_date.date()
+        end_date_only = end_date.date()
+        
+        while current_date <= end_date_only:
+            date_str = current_date.strftime("%Y-%m-%d")
+            
+            # Try multi-source combined archive first
+            multi_source_pattern = archive_base / f"ercot_multi_source_{date_str}_*.parquet"
+            multi_source_files = glob.glob(str(multi_source_pattern))
+            
+            if multi_source_files:
+                # Use latest file for the date
+                latest_file = max(multi_source_files)
+                try:
+                    df_day = pd.read_parquet(latest_file)
+                    
+                    # Ensure timestamp column exists and is datetime
+                    if 'timestamp' in df_day.columns:
+                        df_day['timestamp'] = pd.to_datetime(df_day['timestamp'], utc=True)
+                    elif 'DeliveryDate' in df_day.columns:
+                        # Handle ERCOT timestamp format
+                        df_day['timestamp'] = pd.to_datetime(df_day['DeliveryDate'], utc=True)
+                        if 'DeliveryHour' in df_day.columns and 'DeliveryInterval' in df_day.columns:
+                            df_day['timestamp'] += pd.to_timedelta(
+                                (df_day['DeliveryHour'] - 1) * 60 + (df_day['DeliveryInterval'] - 1) * 5,
+                                unit='min'
+                            )
+                    
+                    # Standardize column names
+                    if 'LMP' in df_day.columns and 'lmp_usd' not in df_day.columns:
+                        df_day['lmp_usd'] = df_day['LMP']
+                    
+                    dfs.append(df_day)
+                    print(f"📂 Loaded multi-source data for {date_str}: {len(df_day)} records")
+                    
+                except Exception as e:
+                    print(f"⚠️  Failed to load multi-source data for {date_str}: {e}")
+            
+            else:
+                # Fallback to individual source files
+                lmp_pattern = archive_base / f"ercot_lmp_{date_str}_*.parquet"
+                lmp_files = glob.glob(str(lmp_pattern))
+                
+                if lmp_files:
+                    try:
+                        latest_lmp = max(lmp_files)
+                        df_lmp = pd.read_parquet(latest_lmp)
+                        
+                        # Basic timestamp handling for LMP data
+                        if 'timestamp' not in df_lmp.columns and 'DeliveryDate' in df_lmp.columns:
+                            df_lmp['timestamp'] = pd.to_datetime(df_lmp['DeliveryDate'], utc=True)
+                            if 'DeliveryHour' in df_lmp.columns:
+                                df_lmp['timestamp'] += pd.to_timedelta((df_lmp['DeliveryHour'] - 1) * 60, unit='min')
+                            if 'DeliveryInterval' in df_lmp.columns:
+                                df_lmp['timestamp'] += pd.to_timedelta((df_lmp['DeliveryInterval'] - 1) * 5, unit='min')
+                        
+                        if 'LMP' in df_lmp.columns:
+                            df_lmp['lmp_usd'] = df_lmp['LMP']
+                        
+                        # Add estimated load if not present
+                        if 'net_load_mw' not in df_lmp.columns and 'lmp_usd' in df_lmp.columns:
+                            # Reverse-estimate load from LMP using simple model
+                            df_lmp['net_load_mw'] = 45000 + (df_lmp['lmp_usd'] - 25) / 0.001
+                        
+                        dfs.append(df_lmp)
+                        print(f"📂 Loaded LMP archive for {date_str}: {len(df_lmp)} records")
+                        
+                    except Exception as e:
+                        print(f"⚠️  Failed to load LMP archive for {date_str}: {e}")
+            
+            current_date += timedelta(days=1)
+        
+        if not dfs:
+            print(f"📭 No archived data found for {start_date.date()} to {end_date.date()}")
+            return pd.DataFrame()
+        
+        # Combine all dataframes
+        combined = pd.concat(dfs, ignore_index=True)
+        
+        # Filter to requested time range
+        if 'timestamp' in combined.columns:
+            combined = combined[
+                (combined['timestamp'] >= start_date) & 
+                (combined['timestamp'] <= end_date)
+            ]
+        
+        print(f"✅ Loaded {len(combined)} archived records from {len(dfs)} files")
+        return combined
     
     def _fetch_historical_dashboard_data(
         self,
@@ -160,12 +275,34 @@ class BatteryDataClient(ERCOTDataClient):
         """
         Add ancillary service prices with realistic patterns.
         
+        Uses real ancillary price data if available from multi-source archives,
+        otherwise generates synthetic prices.
+        
         Ancillary prices typically:
         - Reg Up/Down: $5-30/MW
         - RRS (spinning reserve): $10-50/MW
         - ECRS (non-spinning): $5-30/MW
         - Higher during tight supply conditions
         """
+        # Check if we already have real ancillary price data
+        has_real_as_data = any(col in df.columns for col in 
+                              ['reg_up_price', 'reg_down_price', 'rrs_price', 'ecrs_price'])
+        
+        if has_real_as_data:
+            print("✅ Using real ancillary service prices from archived data")
+            # Fill any missing AS price columns with reasonable defaults
+            if 'reg_up_price' not in df.columns:
+                df['reg_up_price'] = 15.0
+            if 'reg_down_price' not in df.columns:
+                df['reg_down_price'] = 8.0
+            if 'rrs_price' not in df.columns:
+                df['rrs_price'] = 20.0
+            if 'ecrs_price' not in df.columns:
+                df['ecrs_price'] = 12.0
+            return df
+        
+        print("🎲 Generating synthetic ancillary service prices")
+        
         n = len(df)
         
         # Scarcity indicator (high load periods)

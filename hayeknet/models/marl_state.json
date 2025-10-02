@@ -26,6 +26,30 @@
           "timesteps": 10000,
           "total_data_points": 27378,
           "date": "2025-10-02T01:12:01.727602"
+        },
+        {
+          "resource_type": "battery",
+          "timesteps": 10000,
+          "total_data_points": 185328,
+          "date": "2025-10-02T01:18:41.181571"
+        },
+        {
+          "resource_type": "battery",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T03:09:59.097804"
+        },
+        {
+          "resource_type": "battery",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T03:39:39.007418"
+        },
+        {
+          "resource_type": "battery",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T03:58:04.616346"
         }
       ]
     },
@@ -55,6 +79,30 @@
           "timesteps": 10000,
           "total_data_points": 27378,
           "date": "2025-10-02T01:12:05.206537"
+        },
+        {
+          "resource_type": "solar",
+          "timesteps": 10000,
+          "total_data_points": 185328,
+          "date": "2025-10-02T01:18:43.850063"
+        },
+        {
+          "resource_type": "solar",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T03:10:01.974439"
+        },
+        {
+          "resource_type": "solar",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T03:39:41.843187"
+        },
+        {
+          "resource_type": "solar",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T03:58:07.520062"
         }
       ]
     },
@@ -84,6 +132,30 @@
           "timesteps": 10000,
           "total_data_points": 27378,
           "date": "2025-10-02T01:12:08.298005"
+        },
+        {
+          "resource_type": "wind",
+          "timesteps": 10000,
+          "total_data_points": 185328,
+          "date": "2025-10-02T01:18:46.499495"
+        },
+        {
+          "resource_type": "wind",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T03:10:04.844020"
+        },
+        {
+          "resource_type": "wind",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T03:39:44.726655"
+        },
+        {
+          "resource_type": "wind",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T03:58:10.426455"
         }
       ]
     }

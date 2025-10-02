@@ -152,12 +152,17 @@ class SCEDSimulator(MarketSimulator):
         3. No co-optimization across markets
         4. Battery must choose: energy arbitrage OR AS
         """
-        # Extract market prices
-        lmp = float(market_data.get("lmp_usd", 0))
-        reg_up_price = float(market_data.get("reg_up_price", 0))
-        reg_down_price = float(market_data.get("reg_down_price", 0))
-        rrs_price = float(market_data.get("rrs_price", 0))
-        ecrs_price = float(market_data.get("ecrs_price", 0))
+        # Extract market prices with fallbacks for historical data
+        lmp = float(market_data.get("lmp_usd", market_data.get("LMP", 25.0)))
+        reg_up_price = float(market_data.get("reg_up_price", 15.0))
+        reg_down_price = float(market_data.get("reg_down_price", 8.0))
+        rrs_price = float(market_data.get("rrs_price", 20.0))
+        ecrs_price = float(market_data.get("ecrs_price", 12.0))
+        
+        # Log data sources for debugging
+        data_source = market_data.get("data_source", "unknown")
+        if hasattr(self, '_log_data_sources') and getattr(self, '_log_data_sources', False):
+            print(f"📊 SCED using data from: {data_source} (LMP: ${lmp:.2f}/MWh, RegUp: ${reg_up_price:.2f}/MW)")
         
         outcome = MarketOutcome(
             energy_price=lmp,
@@ -250,12 +255,17 @@ class RTCPlusBSimulator(MarketSimulator):
         3. SOC constraints respected in dispatch
         4. ASDCs allow more efficient AS procurement
         """
-        # Extract market prices
-        lmp = float(market_data.get("lmp_usd", 0))
-        reg_up_price = float(market_data.get("reg_up_price", 0))
-        reg_down_price = float(market_data.get("reg_down_price", 0))
-        rrs_price = float(market_data.get("rrs_price", 0))
-        ecrs_price = float(market_data.get("ecrs_price", 0))
+        # Extract market prices with fallbacks for historical data
+        lmp = float(market_data.get("lmp_usd", market_data.get("LMP", 25.0)))
+        reg_up_price = float(market_data.get("reg_up_price", 15.0))
+        reg_down_price = float(market_data.get("reg_down_price", 8.0))
+        rrs_price = float(market_data.get("rrs_price", 20.0))
+        ecrs_price = float(market_data.get("ecrs_price", 12.0))
+        
+        # Log data sources for debugging
+        data_source = market_data.get("data_source", "unknown")
+        if hasattr(self, '_log_data_sources') and getattr(self, '_log_data_sources', False):
+            print(f"🗺 RTC+B using data from: {data_source} (LMP: ${lmp:.2f}/MWh, RegUp: ${reg_up_price:.2f}/MW)")
         
         # ASDC adjustment: prices more responsive to scarcity
         if self.asdc_enabled:
@@ -330,18 +340,43 @@ class RTCPlusBSimulator(MarketSimulator):
         Compute ASDC scarcity multiplier based on system conditions.
         
         Higher multiplier during tight conditions (high load, low reserves).
+        Uses multiple indicators from multi-source data when available.
         """
-        # Simple scarcity model based on load percentile
-        if "net_load_mw" in market_data:
-            # Assume high load correlates with scarcity
-            load = float(market_data["net_load_mw"])
+        multiplier = 1.0
+        
+        # Load-based scarcity
+        load_mw = market_data.get("net_load_mw") or market_data.get("total_load_mw")
+        if load_mw:
+            load = float(load_mw)
             if load > 70000:  # Very high load
-                return 1.5
+                multiplier = max(multiplier, 1.5)
             elif load > 65000:  # High load
-                return 1.2
-            else:
-                return 1.0
-        return 1.0
+                multiplier = max(multiplier, 1.2)
+        
+        # Price-based scarcity indicator
+        lmp = market_data.get("lmp_usd") or market_data.get("LMP")
+        if lmp:
+            price = float(lmp)
+            if price > 100:  # High price indicates scarcity
+                multiplier = max(multiplier, 1.4)
+            elif price > 50:
+                multiplier = max(multiplier, 1.1)
+        
+        # Generation mix indicators (if available from multi-source)
+        renewable_output = market_data.get("renewable_output_pct")
+        if renewable_output:
+            renewable_pct = float(renewable_output)
+            if renewable_pct < 0.2:  # Low renewable output = tight conditions
+                multiplier = max(multiplier, 1.3)
+        
+        # Forecast error indicator (from load volatility)
+        load_volatility = market_data.get("load_volatility")
+        if load_volatility:
+            volatility = float(load_volatility)
+            if volatility > 3000:  # High volatility = uncertainty
+                multiplier = max(multiplier, 1.2)
+        
+        return min(multiplier, 2.0)  # Cap at 2.0x
 
 
 def compare_market_designs(

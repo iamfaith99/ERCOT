@@ -37,6 +37,8 @@ research/journal/journal_*.md
 research/observations/observation_*.md
 research/observations/week_ending_*.md
 research/results/results_*.json
+research/insights/**
+research/qa/**
 research/RESEARCH_PROGRESS.md
 
 # Model checkpoints and training data

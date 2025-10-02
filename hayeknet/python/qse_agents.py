@@ -138,6 +138,7 @@ class QSEAgent:
         
         State includes:
         - Recent LMP history (normalized)
+        - Ancillary service prices (reg up/down, RRS, ECRS)
         - Grid DAG features (congestion, flows)
         - Agent's resource characteristics
         - Bayesian belief states
@@ -145,7 +146,7 @@ class QSEAgent:
         Parameters
         ----------
         lmp_data : pd.DataFrame
-            Recent LMP observations
+            Recent LMP observations (may include AS prices)
         grid_state : Dict, optional
             Grid topology and constraint states
             
@@ -155,13 +156,36 @@ class QSEAgent:
             State vector for RL policy
         """
         # LMP features (last 12 intervals = 1 hour)
-        recent_lmps = lmp_data['LMP'].tail(12).values
+        lmp_col = 'LMP' if 'LMP' in lmp_data.columns else 'lmp_usd'
+        recent_lmps = lmp_data[lmp_col].tail(12).values
         if len(recent_lmps) < 12:
             recent_lmps = np.pad(recent_lmps, (12-len(recent_lmps), 0), constant_values=25.0)
         
         lmp_mean = recent_lmps.mean()
         lmp_std = recent_lmps.std() + 1e-6
         lmp_features = (recent_lmps - lmp_mean) / lmp_std
+        
+        # Ancillary service price features (current values, normalized)
+        as_features = np.zeros(4)  # reg_up, reg_down, rrs, ecrs
+        if not lmp_data.empty:
+            latest_row = lmp_data.iloc[-1]
+            
+            # Extract AS prices with fallbacks
+            reg_up = latest_row.get('reg_up_price', 15.0)
+            reg_down = latest_row.get('reg_down_price', 8.0)
+            rrs = latest_row.get('rrs_price', 20.0)
+            ecrs = latest_row.get('ecrs_price', 12.0)
+            
+            # Normalize AS prices (typical range: $5-50/MW)
+            as_features = np.array([
+                (reg_up - 15.0) / 20.0,   # Centered at $15, scale by $20
+                (reg_down - 8.0) / 15.0,  # Centered at $8, scale by $15
+                (rrs - 20.0) / 25.0,      # Centered at $20, scale by $25
+                (ecrs - 12.0) / 18.0,     # Centered at $12, scale by $18
+            ])
+            
+            # Clip to reasonable range
+            as_features = np.clip(as_features, -3.0, 3.0)
         
         # Resource characteristics
         resource_features = np.array([
@@ -191,11 +215,12 @@ class QSEAgent:
         
         # Concatenate all features
         state = np.concatenate([
-            lmp_features,
-            resource_features,
-            belief_features,
-            grid_features
-        ])
+            lmp_features,      # 12 features
+            as_features,       # 4 features (reg_up, reg_down, rrs, ecrs)
+            resource_features, # 4 features
+            belief_features,   # 4 features
+            grid_features      # 3 features
+        ])                     # Total: 27 features
         
         return state.astype(np.float32)
     
@@ -203,11 +228,13 @@ class QSEAgent:
         self,
         action: float,
         lmp: float,
-        opportunity_cost: float = 0.0
+        opportunity_cost: float = 0.0,
+        as_prices: Optional[Dict[str, float]] = None,
+        as_dispatch: Optional[Dict[str, float]] = None
     ) -> float:
-        """Compute reward for RL training.
+        """Compute reward for RL training with ancillary service considerations.
         
-        Reward = LMP * dispatch - opportunity_cost - penalties
+        Reward = Energy_Revenue + AS_Revenue - opportunity_cost - penalties
         
         Parameters
         ----------
@@ -217,15 +244,30 @@ class QSEAgent:
             Realized LMP ($/MWh)
         opportunity_cost : float
             Cost of committing resource
+        as_prices : Dict, optional
+            Ancillary service prices (reg_up, reg_down, rrs, ecrs)
+        as_dispatch : Dict, optional
+            Ancillary service dispatch amounts (MW)
             
         Returns
         -------
         reward : float
             Reward signal for RL agent
         """
-        # Revenue from dispatch
+        # Energy market revenue
         dispatch_mw = action * self.capacity_mw
-        revenue = lmp * dispatch_mw
+        energy_revenue = lmp * dispatch_mw
+        
+        # Ancillary service revenue
+        as_revenue = 0.0
+        if as_prices and as_dispatch:
+            for service in ['reg_up', 'reg_down', 'rrs', 'ecrs']:
+                price = as_prices.get(f'{service}_price', 0.0)
+                dispatch = as_dispatch.get(f'{service}_mw', 0.0)
+                as_revenue += price * dispatch
+        
+        # Total revenue
+        total_revenue = energy_revenue + as_revenue
         
         # Costs
         cost = opportunity_cost * abs(dispatch_mw)
@@ -237,8 +279,16 @@ class QSEAgent:
         if action > self.characteristics['max_output']:
             penalty += 100.0 * abs(action - self.characteristics['max_output'])
         
+        # Battery-specific penalty for inefficient cycling
+        if self.resource_type == ResourceType.BATTERY:
+            # Penalize frequent direction changes
+            if hasattr(self, '_last_action') and self._last_action is not None:
+                if (self._last_action > 0) != (action > 0) and abs(action) > 0.1:
+                    penalty += 5.0  # Small cycling penalty
+            self._last_action = action
+        
         # Net reward (per 5-min interval)
-        reward = (revenue - cost - penalty) / 12.0  # Normalize to $/hour
+        reward = (total_revenue - cost - penalty) / 12.0  # Normalize to $/hour
         
         return reward
     
@@ -506,9 +556,9 @@ class MARLSystem:
                 self.data = data
                 self.current_idx = 0
                 
-                # State: 23 features (12 LMP + 4 resource + 4 beliefs + 3 grid)
+                # State: 27 features (12 LMP + 4 AS + 4 resource + 4 beliefs + 3 grid)
                 self.observation_space = spaces.Box(
-                    low=-10.0, high=10.0, shape=(23,), dtype=np.float32
+                    low=-10.0, high=10.0, shape=(27,), dtype=np.float32
                 )
                 
                 # Action: bid quantity (fraction of capacity)
@@ -537,7 +587,7 @@ class MARLSystem:
                 terminated = self.current_idx >= len(self.data) - 1
                 truncated = False
                 
-                obs = self._get_observation() if not terminated else np.zeros(23, dtype=np.float32)
+                obs = self._get_observation() if not terminated else np.zeros(27, dtype=np.float32)
                 
                 return obs, reward, terminated, truncated, {}
             

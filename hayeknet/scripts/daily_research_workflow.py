@@ -27,6 +27,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from python.data import ERCOTDataClient
 from python.battery_daily_analysis import run_battery_daily_analysis
 from python.research_observations import ResearchObservationTracker
+from python.research_analysis import run_automated_analysis
+from python.research_qa import answer_and_save_questions
 from python.qse_agents import MARLSystem, ResourceType
 
 
@@ -274,7 +276,7 @@ def generate_research_notes(df: pd.DataFrame, results: dict, dirs: dict, battery
     
     notes = f"""# HayekNet Daily Research Journal
 ## {today.strftime('%B %d, %Y - %A')}
-**Day {(today - datetime(2025, 9, 29)).days + 1} of Research Period**
+**Day {(today - datetime(2025, 10, 1)).days + 1} of Research Period**
 *Target: December 5, 2025 ERCOT RTC Launch*
 
 ---
@@ -466,7 +468,7 @@ def create_progress_summary(dirs: dict):
 
 - [x] HayekNet system implementation
 - [x] ERCOT data integration
-- [x] Historical data archive (Sept 24-29)
+- [x] Historical data archive (Sept 24 - Oct 1)
 - [x] Daily automation setup
 - [ ] Complete data collection through Dec 5
 - [ ] Statistical analysis of results
@@ -579,6 +581,120 @@ def main():
                     weekly_summary = obs_tracker.generate_weekly_summary(datetime.now())
                     summary_file = obs_tracker.save_weekly_summary(datetime.now(), weekly_summary)
                     print(f"📋 Weekly summary created: {summary_file.name}")
+                    
+                # 🤖 NEW: Run automated AI analysis
+                print(f"\n{'='*80}")
+                print("STEP 3.6: 🤖 AI-Powered Research Analysis")
+                print(f"{'='*80}\n")
+                
+                try:
+                    # Run AI-powered analysis
+                    insights = run_automated_analysis(
+                        research_dir=dirs['research'],
+                        date=datetime.now(),
+                        market_data=df,
+                        battery_metrics=battery_metrics,
+                        agent_performance={
+                            'total_timesteps': results.get('components', {}).get('reinforcement_learning', {}).get('total_timesteps', 0),
+                            'mean_reward': results.get('components', {}).get('reinforcement_learning', {}).get('mean_reward', 0),
+                            'reward_std': results.get('components', {}).get('reinforcement_learning', {}).get('reward_std', 0)
+                        },
+                        system_results={
+                            'total_observations': len(df),
+                            'components_successful': len([c for c in results.get('components', {}).values() if c.get('status') == 'success']),
+                            'data_quality': 'good' if len(df) > 10000 else 'limited'
+                        }
+                    )
+                    
+                    print(f"🎯 AI Analysis Complete: Generated {len(insights)} insights")
+                    
+                    # Show top insights
+                    high_sig_insights = [i for i in insights if i.significance == 'high']
+                    if high_sig_insights:
+                        print("\n🔍 Key Findings:")
+                        for insight in high_sig_insights[:3]:  # Top 3 most significant
+                            print(f"   • {insight.title}")
+                            print(f"     {insight.description[:100]}...")
+                    
+                    # Show patterns and anomalies
+                    patterns = [i for i in insights if i.insight_type == 'pattern']
+                    anomalies = [i for i in insights if i.insight_type == 'anomaly']
+                    
+                    if patterns:
+                        print(f"\n📊 Patterns Detected: {len(patterns)}")
+                        for pattern in patterns[:2]:
+                            print(f"   • {pattern.title}")
+                            
+                    if anomalies:
+                        print(f"\n⚠️  Anomalies Detected: {len(anomalies)}")
+                        for anomaly in anomalies:
+                            print(f"   • {anomaly.title}")
+                    
+                    # Show questions generated
+                    all_questions = []
+                    for insight in insights:
+                        all_questions.extend(insight.follow_up_questions)
+                    unique_questions = list(set(all_questions))
+                    
+                    if unique_questions:
+                        print(f"\n❓ Research Questions Generated: {len(unique_questions)}")
+                        for i, question in enumerate(unique_questions[:3], 1):
+                            print(f"   {i}. {question}")
+                    
+                    print(f"\n💾 Insights saved to: research/insights/")
+                    print(f"📝 AI summary available: research/insights/analysis_summary_{datetime.now().strftime('%Y-%m-%d')}.md")
+                    
+                    # 🤖 NEW: Answer the generated research questions
+                    print(f"\n{'='*80}")
+                    print("STEP 3.7: 🤖 AI Question Answering")
+                    print(f"{'='*80}\n")
+                    
+                    try:
+                        # Collect all questions from insights
+                        all_questions = []
+                        for insight in insights:
+                            all_questions.extend(insight.follow_up_questions)
+                        
+                        # Remove duplicates while preserving order
+                        unique_questions = list(dict.fromkeys(all_questions))
+                        
+                        if unique_questions:
+                            print(f"📝 Answering {len(unique_questions)} research questions...")
+                            
+                            # Answer the questions
+                            answers = answer_and_save_questions(
+                                questions=unique_questions,
+                                market_data=df,
+                                battery_metrics=battery_metrics,
+                                system_results=results,
+                                research_dir=dirs['research'],
+                                date=datetime.now()
+                            )
+                            
+                            # Show top answers
+                            high_conf = [a for a in answers if a.confidence >= 0.7]
+                            if high_conf:
+                                print(f"\n✅ High Confidence Answers: {len(high_conf)}")
+                                for answer in high_conf[:2]:
+                                    print(f"   Q: {answer.question}")
+                                    print(f"   A: {answer.answer[:100]}...")
+                                    print(f"   Confidence: {answer.confidence*100:.0f}%\n")
+                            
+                            print(f"\n📊 Q&A Complete:")
+                            print(f"   Total answered: {len(answers)}")
+                            print(f"   Avg confidence: {np.mean([a.confidence for a in answers])*100:.0f}%")
+                            print(f"   Saved to: research/qa/qa_summary_{datetime.now().strftime('%Y-%m-%d')}.md")
+                        else:
+                            print("ℹ️  No questions to answer")
+                            
+                    except Exception as e:
+                        print(f"⚠️  Q&A system failed: {e}")
+                        print("   Continuing without Q&A...")
+                    
+                except Exception as e:
+                    print(f"⚠️  AI Analysis failed: {e}")
+                    print("   Continuing without automated analysis...")
+                    
             except Exception as e:
                 print(f"⚠️  Observation generation failed: {e}")
                 print("   Continuing without observations...")

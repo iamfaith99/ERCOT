@@ -52,7 +52,7 @@ class ResearchObservationTracker:
         str
             Markdown-formatted observation template
         """
-        day_num = (date - datetime(2025, 9, 29)).days + 1
+        day_num = (date - datetime(2025, 10, 1)).days + 1
         days_remaining = (datetime(2025, 12, 5) - date).days
         
         # Market analysis
