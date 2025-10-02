@@ -2,7 +2,7 @@
 
 **Graduate Thesis Project**: Battery Energy Storage Optimization in ERCOT RTC Market  
 **Student**: Weldon T. Antoine III  
-**Institution**: [Your University]  
+**Institution**: Utah State University  
 **Timeline**: October 2025 - December 2025
 
 ---
@@ -60,10 +60,11 @@
 - **Settlement Points**: 1,053 nodes
 
 ### Collection Schedule
-- **Time**: 8:00 PM MT daily (automatic)
-- **Wake**: Mac wakes at 7:55 PM MT
+- **Time**: 1:00 AM MT daily (automatic)
+- **Wake**: Mac wakes at 12:55 AM MT
 - **Duration**: ~15 minutes per run
 - **Storage**: Parquet format with snappy compression
+- **Rationale**: Collects complete previous day (00:00-23:55)
 
 ### Expected Volume
 - **Per Day**: ~303,000 observations (1,053 nodes × 288 intervals)
@@ -127,12 +128,12 @@ research/
 
 ## 🔄 Nightly Automation
 
-### Workflow (8:00 PM MT)
+### Workflow (1:00 AM MT)
 
-1. **Wake Mac** (7:55 PM MT via pmset)
+1. **Wake Mac** (12:55 AM MT via pmset)
 2. **Activate Environment** (hayeknet conda env)
 3. **Collect Data** (~5 min)
-   - Fetch latest ERCOT reports
+   - Fetch COMPLETE previous day (00:00-23:55)
    - Append to archive
    - Deduplicate
 4. **Train Agents** (~10 min)
@@ -140,7 +141,7 @@ research/
    - Train battery, solar, wind agents
    - Save updated models
 5. **Battery Analysis** (~1 min)
-   - Run arbitrage simulation
+   - Run arbitrage simulation on full day
    - Calculate daily PnL
    - Track SOC utilization
 6. **Generate Reports** (~1 min)
@@ -150,7 +151,8 @@ research/
 7. **Sleep** - Mac can sleep until next day
 
 **Total Runtime**: ~15 minutes  
-**User Intervention**: None (fully automated)
+**User Intervention**: None (fully automated)  
+**Key Advantage**: Each run captures a complete 24-hour period
 
 ---
 
