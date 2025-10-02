@@ -8,7 +8,20 @@
         "congestion_prob": 0.05,
         "volatility_state": 0.2
       },
-      "training_history": []
+      "training_history": [
+        {
+          "resource_type": "battery",
+          "timesteps": 10000,
+          "total_data_points": 157206,
+          "date": "2025-10-01T01:49:07.134085"
+        },
+        {
+          "resource_type": "battery",
+          "timesteps": 10000,
+          "total_data_points": 157206,
+          "date": "2025-10-01T20:30:41.227768"
+        }
+      ]
     },
     "solar": {
       "capacity_mw": 200.0,
@@ -18,7 +31,20 @@
         "congestion_prob": 0.05,
         "volatility_state": 0.2
       },
-      "training_history": []
+      "training_history": [
+        {
+          "resource_type": "solar",
+          "timesteps": 10000,
+          "total_data_points": 157206,
+          "date": "2025-10-01T01:49:09.910453"
+        },
+        {
+          "resource_type": "solar",
+          "timesteps": 10000,
+          "total_data_points": 157206,
+          "date": "2025-10-01T20:30:43.966173"
+        }
+      ]
     },
     "wind": {
       "capacity_mw": 150.0,
@@ -28,7 +54,20 @@
         "congestion_prob": 0.05,
         "volatility_state": 0.2
       },
-      "training_history": []
+      "training_history": [
+        {
+          "resource_type": "wind",
+          "timesteps": 10000,
+          "total_data_points": 157206,
+          "date": "2025-10-01T01:49:12.639650"
+        },
+        {
+          "resource_type": "wind",
+          "timesteps": 10000,
+          "total_data_points": 157206,
+          "date": "2025-10-01T20:30:46.697308"
+        }
+      ]
     }
   },
   "model_dir": "/Users/weldon/Documents/ERCOT/hayeknet/models/qse_agents"
