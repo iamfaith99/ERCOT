@@ -6,8 +6,9 @@
 [![Julia 1.11+](https://img.shields.io/badge/julia-1.11+-purple.svg)](https://julialang.org/)
 [![License: Academic](https://img.shields.io/badge/license-Academic-green.svg)](LICENSE)
 
-**Graduate Research Project** | September 2025 - December 2025  
-**Focus**: Battery Energy Storage System (BESS) bidding strategies for ERCOT's Real-Time Co-Optimization (RTC+B) market
+**Graduate Research Project** | October 1 - December 6, 2025 (67 days)  
+**Focus**: Battery Energy Storage System (BESS) bidding strategies for ERCOT's Real-Time Co-Optimization (RTC+B) market  
+**Status**: ✅ Day 1 Active | Automated nightly collection @ 1:00 AM MT
 
 ---
 
@@ -106,18 +107,40 @@ A hybrid Python-Julia platform for simulating and optimizing 100MW/400MWh batter
 
 ## 📊 Daily Research Workflow
 
+### Automated Nightly Collection (1:00 AM MT)
+
+**Fully automated system** runs every night:
+
+```
+12:55 AM - Mac wakes from sleep
+ 1:00 AM - Data collection begins
+          ├─ Fetch complete previous day (00:00-23:55)
+          ├─ Train MARL agents on all historical data
+          ├─ Run battery arbitrage simulation
+          └─ Generate research journals
+ 1:15 AM - Complete, Mac sleeps until tomorrow
+```
+
+**What gets collected**:
+- **~303,000 observations** per day (1,053 nodes × 288 intervals)
+- **Complete 24-hour period** (no gaps or splits)
+- **Full training cycle** for all 3 QSE agents
+
+### Manual Run (Optional)
+
 ```bash
 cd hayeknet/
 make daily
 ```
 
 **Automatically generates**:
-1. Collects latest ERCOT LMP data (~6,000 observations)
+1. Collects latest ERCOT LMP data
 2. Runs 8-component HayekNet system
-3. Simulates battery trading (arbitrage strategy)
-4. Generates research journal with metrics
-5. Creates observation template for analysis
-6. Tracks progress toward thesis completion
+3. Trains MARL agents (battery, solar, wind)
+4. Simulates battery trading (arbitrage strategy)
+5. Generates research journal with metrics
+6. Creates observation template for analysis
+7. Tracks progress toward thesis completion
 
 **Output** (3 files daily):
 - `research/journal/` - Auto-generated data and metrics
@@ -215,13 +238,14 @@ ERCOT/
 - Strategy observations
 - Research insights for thesis
 
-### By December 5, 2025
+### By December 6, 2025 (Study End)
 
-- **67 days** of battery simulations
-- **~19,000 trading intervals** analyzed
-- **~1.3M market observations** collected
+- **67 days** of battery simulations (Oct 1 - Dec 6)
+- **19,296 trading intervals** analyzed (288 per day)
+- **~20.3M market observations** collected (303K per day)
 - **Complete dataset** for thesis Results chapter
 - **Accumulated insights** for Discussion chapter
+- **Trained MARL agents** with 67 days of learning evolution
 
 ---
 
@@ -366,51 +390,61 @@ This repository represents a complete graduate-level research project demonstrat
 
 ## 📅 Timeline
 
-**Phase 1** (Sep 29 - Oct 5): Setup & Validation
+**Phase 1** (Sep 29 - Oct 1): Setup & Validation ✅
 - ✅ System operational
-- ✅ Daily workflow running
+- ✅ Daily workflow running (1:00 AM MT)
 - ✅ Data collection automated
+- ✅ MARL agents implemented
+- ✅ Study period: Oct 1 - Dec 6, 2025
 
-**Phase 2** (Oct 6 - Nov 15): Data Collection (40 days)
-- Daily data ingestion
-- Battery simulation
+**Phase 2** (Oct 1 - Nov 15): Data Collection & Agent Training (46 days)
+- ✅ Automated nightly data ingestion (1:00 AM MT)
+- ✅ MARL agents train incrementally each night
+- Daily battery simulation
 - Observation tracking
 - Pattern identification
+- Agent performance evolution
 
 **Phase 3** (Nov 16 - Nov 30): Analysis & RTC+B (15 days)
-- RTC+B approximation
-- Strategy comparison
+- RTC+B approximation with trained agents
+- Strategy comparison (RL vs heuristics)
 - Statistical analysis
 - Results generation
 
-**Phase 4** (Dec 1 - Dec 5): Thesis Writing (5 days)
+**Phase 4** (Dec 1 - Dec 6): Final Collection & Thesis Writing (6 days)
+- Complete 67-day data collection (Dec 6)
 - Compile results
 - Generate figures
-- Write paper
-- Submit thesis
+- Write thesis
+- Final analysis
 
 ---
 
 ## 🚀 Commands Reference
 
 ```bash
-# Daily workflow (run every morning)
+# Daily workflow runs automatically at 1:00 AM MT
+# Manual run (optional):
 make daily
 
-# View today's journal
+# View yesterday's journal (after 1:00 AM collection)
+cat research/journal/journal_$(date -v-1d +%Y-%m-%d).md
+
+# View today's partial data
 cat research/journal/journal_$(date +%Y-%m-%d).md
 
-# Open observation file
+# Open observation file for analysis
 open research/observations/observation_$(date +%Y-%m-%d).md
 
-# View progress
+# View overall progress
 cat research/RESEARCH_PROGRESS.md
 
-# Analyze results
-python scripts/analyze_latest.py
+# Check if last night's collection ran
+tail -50 logs/launchd.out
 
-# Compare multiple runs
-python scripts/compare_runs.py
+# Verify schedule
+pmset -g sched  # Should show: wakepoweron at 12:55AM
+launchctl list | grep hayeknet  # Should show: com.hayeknet.daily
 ```
 
 ---
@@ -464,10 +498,11 @@ MIT License - Academic and research use encouraged. Market data sourced from ERC
 
 ---
 
-**Project Status**: ✅ Active Development  
-**Data Pipeline**: ✅ Operational (1.8M+ observations)  
-**Research Phase**: Data Collection (67-day study)  
-**Expected Completion**: December 5, 2025  
+**Project Status**: ✅ Day 1 Active (Oct 1, 2025)  
+**Data Pipeline**: ✅ Fully Automated (1:00 AM MT nightly)  
+**Research Phase**: Data Collection & MARL Training (67-day study)  
+**Study Period**: October 1 - December 6, 2025  
+**MARL Agents**: ✅ Training incrementally on growing dataset  
 
 ---
 
