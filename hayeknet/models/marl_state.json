@@ -50,6 +50,24 @@
           "timesteps": 10000,
           "total_data_points": 197964,
           "date": "2025-10-02T03:58:04.616346"
+        },
+        {
+          "resource_type": "battery",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T15:55:17.558898"
+        },
+        {
+          "resource_type": "battery",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T16:01:34.136497"
+        },
+        {
+          "resource_type": "battery",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-03T05:41:01.146072"
         }
       ]
     },
@@ -103,6 +121,24 @@
           "timesteps": 10000,
           "total_data_points": 197964,
           "date": "2025-10-02T03:58:07.520062"
+        },
+        {
+          "resource_type": "solar",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T15:55:20.611976"
+        },
+        {
+          "resource_type": "solar",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T16:01:36.988697"
+        },
+        {
+          "resource_type": "solar",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-03T05:41:03.969565"
         }
       ]
     },
@@ -156,6 +192,24 @@
           "timesteps": 10000,
           "total_data_points": 197964,
           "date": "2025-10-02T03:58:10.426455"
+        },
+        {
+          "resource_type": "wind",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T15:55:23.642647"
+        },
+        {
+          "resource_type": "wind",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-02T16:01:39.880194"
+        },
+        {
+          "resource_type": "wind",
+          "timesteps": 10000,
+          "total_data_points": 197964,
+          "date": "2025-10-03T05:41:06.820239"
         }
       ]
     }

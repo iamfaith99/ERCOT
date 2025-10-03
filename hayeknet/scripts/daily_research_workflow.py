@@ -8,9 +8,16 @@ This script runs the complete daily workflow:
 4. Save results for thesis/paper
 
 Usage:
-    python scripts/daily_research_workflow.py
+    python scripts/daily_research_workflow.py                 # Normal daily run
+    python scripts/daily_research_workflow.py --quick          # Quick test (1 hour data)
+    python scripts/daily_research_workflow.py --force-fresh    # Force fresh download
     python scripts/daily_research_workflow.py --no-data-fetch  # Skip data fetch
-    python scripts/daily_research_workflow.py --quick          # Quick test run
+
+Caching Strategy:
+    - Automatically fetches fresh data on first run each day
+    - Uses cached data if run multiple times within 15 minutes
+    - Old report lists are automatically cleaned up
+    - Use --force-fresh to bypass cache and force fresh download
 """
 import sys
 import argparse
@@ -52,8 +59,17 @@ def setup_directories():
     return dirs
 
 
-def fetch_daily_data(client: ERCOTDataClient, quick: bool = False) -> pd.DataFrame:
-    """Fetch latest ERCOT data."""
+def fetch_daily_data(client: ERCOTDataClient, quick: bool = False, force_fresh: bool = False) -> pd.DataFrame:
+    """Fetch latest ERCOT data.
+    
+    Args:
+        client: ERCOTDataClient instance
+        quick: If True, fetch only 1 hour of data (12 reports) instead of 8 hours (100 reports)
+        force_fresh: If True, bypass cache and download fresh data
+    
+    Returns:
+        DataFrame with latest ERCOT LMP data
+    """
     print(f"\n{'='*80}")
     print(f"STEP 1: Data Ingestion - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*80}\n")
@@ -64,10 +80,63 @@ def fetch_daily_data(client: ERCOTDataClient, quick: bool = False) -> pd.DataFra
     print(f"   Mode: {'Quick test (1 hour)' if quick else 'Full (8 hours)'}")
     print(f"   Reports: ~{max_reports}")
     
+    # Smart caching strategy:
+    # - Use cache for individual report files (efficient, avoids re-downloading)
+    # - BUT force fresh report LIST to get latest available reports
+    # - This ensures we always get today's newest data while still leveraging cache
+    
+    today = datetime.now().date()
+    cache_dir = client.cache_dir
+    today_str = today.strftime('%Y%m%d')
+    
+    print(f"   📅 Date: {today}")
+    
+    # Always clear old report list cache to force fresh report discovery
+    report_list_files = list(cache_dir.glob('report_list_*.json'))
+    old_lists_cleared = 0
+    for f in report_list_files:
+        try:
+            # Extract date from filename (e.g., 'report_list_real_time_lmp_2025-10-03.json')
+            file_date_str = f.stem.split('_')[-1]  # e.g., '2025-10-03'
+            if file_date_str != str(today):
+                f.unlink()
+                old_lists_cleared += 1
+        except Exception:
+            pass
+    
+    if old_lists_cleared > 0:
+        print(f"   🗑️  Cleared {old_lists_cleared} old report list(s)")
+    
+    # Check what data we already have from today
+    existing_files = list(cache_dir.glob(f'*{today_str}*.pkl'))
+    
+    if force_fresh:
+        print(f"   🔄 Force fresh mode: will download new reports even if cached")
+        use_cache = False
+    else:
+        if existing_files:
+            # Get the newest cached file to check how recent it is
+            newest_file = max(existing_files, key=lambda p: p.stat().st_mtime)
+            cache_age_minutes = (datetime.now().timestamp() - newest_file.stat().st_mtime) / 60
+            
+            print(f"   📂 Found {len(existing_files)} cached reports from today")
+            print(f"   🕒 Most recent cache: {cache_age_minutes:.1f} minutes ago")
+            
+            # If cache is recent (< 15 minutes), use it to avoid hammering ERCOT API
+            if cache_age_minutes < 15:
+                print(f"   ✅ Using cached data (< 15 min old)")
+                use_cache = True
+            else:
+                print(f"   🔄 Cache is stale, fetching fresh reports")
+                use_cache = False  # Will still use cached individual files, but get new report list
+        else:
+            print(f"   🆕 No cached data from today, fetching fresh reports")
+            use_cache = False
+    
     df = client.fetch_historical_data(
         report_type="real_time_lmp",
         max_reports=max_reports,
-        use_cache=True
+        use_cache=use_cache
     )
     
     if df.empty:
@@ -500,6 +569,7 @@ def main():
     parser = argparse.ArgumentParser(description="Daily HayekNet research workflow")
     parser.add_argument('--no-data-fetch', action='store_true', help='Skip data fetching')
     parser.add_argument('--quick', action='store_true', help='Quick test run (1 hour of data)')
+    parser.add_argument('--force-fresh', action='store_true', help='Force fresh data download, bypass cache')
     args = parser.parse_args()
     
     try:
@@ -524,7 +594,7 @@ def main():
             else:
                 df = pd.DataFrame()
         else:
-            df = fetch_daily_data(client, quick=args.quick)
+            df = fetch_daily_data(client, quick=args.quick, force_fresh=args.force_fresh)
         
         # Step 2: Run system
         results = run_hayeknet_system(df, quick=args.quick)
