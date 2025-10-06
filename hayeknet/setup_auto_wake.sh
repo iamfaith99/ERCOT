@@ -40,7 +40,7 @@ cat > ~/Library/LaunchAgents/com.hayeknet.daily.plist << 'PLIST_END'
     <array>
         <string>/bin/bash</string>
         <string>-c</string>
-        <string>cd ~/Documents/ERCOT/hayeknet && source activate_hayeknet.sh && make daily >> logs/daily_$(date +\%Y\%m\%d).log 2>&1</string>
+        <string>cd "$PROJECT_ROOT" && source activate_hayeknet.sh && make daily >> logs/daily_$(date +\%Y\%m\%d).log 2>&1</string>
     </array>
     
     <key>StartCalendarInterval</key>
@@ -52,10 +52,10 @@ cat > ~/Library/LaunchAgents/com.hayeknet.daily.plist << 'PLIST_END'
     </dict>
     
     <key>StandardOutPath</key>
-    <string>~/Documents/ERCOT/hayeknet/logs/launchd.out</string>
+    <string>$PROJECT_ROOT/logs/launchd.out</string>
     
     <key>StandardErrorPath</key>
-    <string>~/Documents/ERCOT/hayeknet/logs/launchd.err</string>
+    <string>$PROJECT_ROOT/logs/launchd.err</string>
     
     <key>RunAtLoad</key>
     <false/>

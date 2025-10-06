@@ -1,6 +1,6 @@
 # HayekNet Graduate Research Makefile
 
-.PHONY: help activate daily quick run run-analysis analyze setup-automation jupyter clean clean-cache clean-runs
+.PHONY: help activate daily quick run run-analysis analyze setup-automation jupyter paper clean clean-cache clean-runs
 
 help:
 	@echo "🎓 HayekNet Graduate Research Commands"
@@ -19,6 +19,9 @@ help:
 	@echo "  activate      - Show activation command"
 	@echo "  setup-automation - Configure daily 2 AM collection"
 	@echo "  jupyter       - Start Jupyter Lab"
+	@echo ""
+	@echo "📝 Paper & Documentation:"
+	@echo "  paper         - Generate research manuscript (PDF + HTML)"
 	@echo ""
 	@echo "🗑️  Cleanup:"
 	@echo "  clean-cache   - Clear old cached data (>7 days)"
@@ -62,6 +65,19 @@ setup-automation:
 jupyter:
 	@echo "📊 Starting Jupyter Lab..."
 	@bash -c "source activate_hayeknet.sh && jupyter lab --no-browser --port=8888"
+
+paper:
+	@echo "📝 Generating research manuscript..."
+	@bash -c "cd docs && quarto render manuscript.qmd --to pdf"
+	@bash -c "cd docs && quarto render manuscript.qmd --to html"
+	@echo ""
+	@echo "✅ Manuscript generated!"
+	@echo "📄 PDF: docs/manuscript.pdf"
+	@echo "🌐 HTML: docs/manuscript.html"
+	@echo ""
+	@echo "To view:"
+	@echo "  open docs/manuscript.pdf"
+	@echo "  open docs/manuscript.html"
 
 clean-cache:
 	@echo "🗑️  Clearing old cached data (>7 days)..."

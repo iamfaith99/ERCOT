@@ -21,6 +21,8 @@ Caching Strategy:
 """
 import sys
 import argparse
+import time
+import os
 from datetime import datetime
 from pathlib import Path
 import json
@@ -37,6 +39,65 @@ from python.research_observations import ResearchObservationTracker
 from python.research_analysis import run_automated_analysis
 from python.research_qa import answer_and_save_questions
 from python.qse_agents import MARLSystem, ResourceType
+
+
+def should_train_agents(data_dir: Path, marl_state_file: Path) -> tuple[bool, str]:
+    """Determine if agent training is needed based on market conditions.
+    
+    Returns:
+        (should_train, reason): Boolean decision and explanation string
+    """
+    # Check days since last training
+    if marl_state_file.exists():
+        try:
+            with open(marl_state_file, 'r') as f:
+                state = json.load(f)
+                last_training = state.get('last_training_date', '2020-01-01T00:00:00')
+                last_date = datetime.fromisoformat(last_training)
+                days_since = (datetime.now() - last_date).days
+                
+                # Always train if it's been more than 7 days
+                if days_since >= 7:
+                    return True, f"Weekly training refresh ({days_since} days since last training)"
+                
+                print(f"   📅 Last trained {days_since} days ago")
+        except Exception as e:
+            print(f"   ⚠️  Error reading training state: {e}")
+            return True, "Training needed: Error reading state file"
+    else:
+        return True, "Training needed: No previous training state found"
+    
+    # Check market volatility from recent parquet files
+    if data_dir.exists():
+        try:
+            parquet_files = sorted(data_dir.glob('ercot_lmp_*.parquet'))
+            if parquet_files:
+                # Look at last 3 days of data
+                recent_files = parquet_files[-3:]
+                volatilities = []
+                
+                for pq_file in recent_files:
+                    try:
+                        df = pd.read_parquet(pq_file)
+                        # Check for lmp_usd column
+                        if 'lmp_usd' in df.columns:
+                            vol = df['lmp_usd'].std()
+                            volatilities.append(vol)
+                    except Exception:
+                        continue
+                
+                if volatilities:
+                    avg_volatility = np.mean(volatilities)
+                    print(f"   📊 Recent market volatility: ${avg_volatility:.2f}/MWh")
+                    
+                    # Train if volatility is high
+                    if avg_volatility > 15.0:
+                        return True, f"High market volatility detected (${avg_volatility:.2f} > $15.00/MWh)"
+        except Exception as e:
+            print(f"   ⚠️  Error checking volatility: {e}")
+    
+    # Market is stable, skip training
+    return False, "Market conditions stable, training skipped to save compute time"
 
 
 def setup_directories():
@@ -155,8 +216,14 @@ def fetch_daily_data(client: ERCOTDataClient, quick: bool = False, force_fresh: 
     return df
 
 
-def run_hayeknet_system(df: pd.DataFrame, quick: bool = False) -> dict:
-    """Run the full HayekNet system with all 8 components."""
+def run_hayeknet_system(df: pd.DataFrame, quick: bool = False, force_train: bool = False) -> dict:
+    """Run the full HayekNet system with all 8 components.
+    
+    Args:
+        df: Market data DataFrame
+        quick: If True, run quick mode with reduced training
+        force_train: If True, force agent training regardless of conditions
+    """
     print(f"\n{'='*80}")
     print("STEP 2: HayekNet System Execution")
     print(f"{'='*80}\n")
@@ -222,17 +289,31 @@ def run_hayeknet_system(df: pd.DataFrame, quick: bool = False) -> dict:
     parquet_files = list(data_dir.glob('ercot_lmp_*.parquet'))
     
     if parquet_files and not quick:
-        print("   🔄 Training agents on historical data...")
-        try:
-            training_metrics = marl_system.train_incremental(
-                data_dir=data_dir,
-                timesteps_per_day=5000 if quick else 10000,
-                save_checkpoints=True
-            )
-            print(f"   ✅ Training complete for {len(training_metrics)} agents")
-        except Exception as e:
-            print(f"   ⚠️  Training failed: {e}")
-            print("   Using heuristic policies instead")
+        # Smart training decision
+        if force_train:
+            should_train = True
+            reason = "Training forced via --force-train flag"
+        else:
+            should_train, reason = should_train_agents(data_dir, marl_state_file)
+        
+        print(f"   🤔 Training decision: {reason}")
+        
+        if should_train:
+            training_start = time.time()
+            print("   🔄 Training agents on historical data...")
+            try:
+                training_metrics = marl_system.train_incremental(
+                    data_dir=data_dir,
+                    timesteps_per_day=5000 if quick else 10000,
+                    save_checkpoints=True
+                )
+                training_time = time.time() - training_start
+                print(f"   ✅ Training complete for {len(training_metrics)} agents in {training_time:.1f}s")
+            except Exception as e:
+                print(f"   ⚠️  Training failed: {e}")
+                print("   Using heuristic policies instead")
+        else:
+            print(f"   ⏭️  Skipping training (estimated time saved: ~49 seconds)")
     
     # Generate bids from trained agents
     recent_lmp_df = hubs.groupby('timestamp').agg({'lmp_usd': 'mean'}).reset_index()
@@ -570,6 +651,7 @@ def main():
     parser.add_argument('--no-data-fetch', action='store_true', help='Skip data fetching')
     parser.add_argument('--quick', action='store_true', help='Quick test run (1 hour of data)')
     parser.add_argument('--force-fresh', action='store_true', help='Force fresh data download, bypass cache')
+    parser.add_argument('--force-train', action='store_true', help='Force agent training regardless of market conditions')
     args = parser.parse_args()
     
     try:
@@ -597,7 +679,7 @@ def main():
             df = fetch_daily_data(client, quick=args.quick, force_fresh=args.force_fresh)
         
         # Step 2: Run system
-        results = run_hayeknet_system(df, quick=args.quick)
+        results = run_hayeknet_system(df, quick=args.quick, force_train=args.force_train)
         
         # Step 2.5: Run battery analysis
         battery_journal = ""

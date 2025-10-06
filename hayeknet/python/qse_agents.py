@@ -498,16 +498,25 @@ class MARLSystem:
             
             # Train or continue training
             if agent.model is None:
-                # Initialize new model
+                # Initialize new model with ERCOT-optimized hyperparameters
+                # 
+                # PPO Hyperparameter Rationale for ERCOT 5-Minute Market:
+                # - learning_rate=1e-4: Conservative LR prevents catastrophic forgetting during price spikes
+                # - n_steps=1024: Balances sample efficiency with update frequency for 288 daily periods
+                # - batch_size=128: Larger batches smooth gradient noise from volatile price signals
+                # - n_epochs=5: Prevents overfitting to recent market conditions that may not persist
+                # - gamma=0.98: Shorter discount factor appropriate for 5-minute decision horizons
+                # - ent_coef=0.01: Maintains exploration to discover new strategies during regime changes
                 agent.model = PPO(
                     "MlpPolicy",
                     env,
                     verbose=0,
-                    learning_rate=3e-4,
-                    n_steps=2048,
-                    batch_size=64,
-                    n_epochs=10,
-                    gamma=0.99,
+                    learning_rate=1e-4,      # Reduced from 3e-4 for more stable convergence
+                    n_steps=1024,            # Reduced from 2048 for faster updates
+                    batch_size=128,          # Increased from 64 for better gradient estimates
+                    n_epochs=5,              # Reduced from 10 to prevent overfitting
+                    gamma=0.98,              # Reduced from 0.99 for shorter horizon
+                    ent_coef=0.01,          # Added: Encourages exploration
                     gae_lambda=0.95,
                     clip_range=0.2,
                 )
@@ -716,10 +725,14 @@ class MARLSystem:
         return float(np.min(drawdown)) * 100
     
     def save_state(self, filepath: Path):
-        """Save MARL system state to disk."""
+        """Save MARL system state to disk with training timestamp."""
+        from datetime import datetime
+        
         state = {
             'agents': {},
-            'model_dir': str(self.model_dir)
+            'model_dir': str(self.model_dir),
+            'last_training_date': datetime.now().isoformat(),  # Track last training
+            'version': '1.1'  # Version the state format
         }
         
         for resource_type, agent in self.agents.items():
@@ -733,9 +746,14 @@ class MARLSystem:
             json.dump(state, f, indent=2)
     
     def load_state(self, filepath: Path):
-        """Load MARL system state from disk."""
+        """Load MARL system state from disk with backward compatibility."""
         with open(filepath, 'r') as f:
             state = json.load(f)
+        
+        # Handle backward compatibility for training timestamp
+        if 'last_training_date' not in state:
+            # Default to very old date if field missing (triggers training)
+            state['last_training_date'] = '2020-01-01T00:00:00'
         
         for resource_str, agent_state in state['agents'].items():
             resource_type = ResourceType(resource_str)
