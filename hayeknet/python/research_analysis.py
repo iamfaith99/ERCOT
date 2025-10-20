@@ -39,6 +39,37 @@ class ResearchInsight:
 class AutomatedResearchAnalyst:
     """AI-powered research analysis system for HayekNet."""
     
+    @staticmethod
+    def _convert_to_native_types(obj: Any) -> Any:
+        """Convert numpy/pandas types to native Python types for JSON serialization.
+        
+        Parameters
+        ----------
+        obj : Any
+            Object to convert (can be dict, list, or scalar)
+            
+        Returns
+        -------
+        converted : Any
+            Object with all numpy types converted to Python native types
+        """
+        if isinstance(obj, dict):
+            return {key: AutomatedResearchAnalyst._convert_to_native_types(value) 
+                    for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [AutomatedResearchAnalyst._convert_to_native_types(item) 
+                    for item in obj]
+        elif isinstance(obj, (np.integer, np.int32, np.int64)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float32, np.float64)):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif pd.isna(obj):
+            return None
+        else:
+            return obj
+    
     def __init__(self, research_dir: Path):
         """Initialize the automated research analyst.
         
@@ -574,11 +605,11 @@ class AutomatedResearchAnalyst:
                 'insight_type': insight.insight_type,
                 'title': insight.title,
                 'description': insight.description,
-                'evidence': insight.evidence,
-                'confidence': insight.confidence,
+                'evidence': self._convert_to_native_types(insight.evidence),
+                'confidence': float(insight.confidence),
                 'significance': insight.significance,
                 'follow_up_questions': insight.follow_up_questions,
-                'statistical_support': insight.statistical_support
+                'statistical_support': self._convert_to_native_types(insight.statistical_support) if insight.statistical_support else None
             }
             insights_data.append(insight_dict)
         
