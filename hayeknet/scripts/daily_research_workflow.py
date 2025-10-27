@@ -27,6 +27,12 @@ from datetime import datetime
 from pathlib import Path
 import json
 
+# CRITICAL: Import juliacall BEFORE any torch/stable-baselines3 imports to prevent segfaults
+try:
+    import juliacall
+except ImportError:
+    juliacall = None
+
 import numpy as np
 import pandas as pd
 
@@ -125,7 +131,7 @@ def fetch_daily_data(client: ERCOTDataClient, quick: bool = False, force_fresh: 
     
     Args:
         client: ERCOTDataClient instance
-        quick: If True, fetch only 1 hour of data (12 reports) instead of 8 hours (100 reports)
+        quick: If True, fetch only 1 hour of data (12 reports) instead of all available reports
         force_fresh: If True, bypass cache and download fresh data
     
     Returns:
@@ -135,10 +141,12 @@ def fetch_daily_data(client: ERCOTDataClient, quick: bool = False, force_fresh: 
     print(f"STEP 1: Data Ingestion - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*80}\n")
     
-    max_reports = 12 if quick else 100  # 1 hour vs ~8 hours
+    # Limit to reasonable number to prevent memory issues
+    # ERCOT publishes ~288 reports/day (every 5 min), so 500 = ~1.7 days of data
+    max_reports = 12 if quick else 500  # 1 hour vs ~1.7 days
     
     print(f"📥 Fetching latest ERCOT LMP data...")
-    print(f"   Mode: {'Quick test (1 hour)' if quick else 'Full (8 hours)'}")
+    print(f"   Mode: {'Quick test (1 hour)' if quick else 'Full (~1.7 days)'}")
     print(f"   Reports: ~{max_reports}")
     
     # Smart caching strategy:

@@ -900,6 +900,8 @@ class ERCOTDataClient:
         if max_reports:
             reports = reports[:max_reports]
             print(f"📊 Processing {len(reports)} reports (limited by max_reports={max_reports})")
+        else:
+            print(f"📊 Processing all {len(reports)} available reports")
         
         # Download and aggregate
         dfs = []

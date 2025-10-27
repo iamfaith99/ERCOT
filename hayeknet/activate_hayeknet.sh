@@ -31,23 +31,18 @@ echo "   Test with: python validate_ercot.py"
 echo "   Run main:  python -m python.main"
 echo ""
 echo "📦 Key packages installed:"
-python -c "
-import sys
-# Import juliacall first to prevent warnings
-try:
-    import juliacall
-    jl_version = juliacall.__version__
-    print(f'   ✅ juliacall {jl_version}')
-except ImportError:
-    print(f'   ❌ juliacall not found')
 
-# Then import other packages
-packages = ['numpy', 'pandas', 'torch', 'stable_baselines3', 'pymc']
-for pkg in packages:
-    try:
-        mod = __import__(pkg)
-        version = getattr(mod, '__version__', 'unknown')
-        print(f'   ✅ {pkg} {version}')
-    except ImportError:
-        print(f'   ❌ {pkg} not found')
-"
+# Allow Makefile and non-interactive contexts to skip import checks that can trigger segfaults
+if [ -n "$HAYEKNET_SKIP_CHECKS" ]; then
+    echo "   ⏭️  Skipping import checks (HAYEKNET_SKIP_CHECKS=1)"
+else
+    # Check packages individually to avoid import conflicts
+    # NOTE: juliacall import can allocate Julia runtime; keep as last and tolerate failure
+    python -c "import numpy; print(f'   ✅ numpy {numpy.__version__}')" 2>/dev/null || echo "   ❌ numpy not found"
+    python -c "import pandas; print(f'   ✅ pandas {pandas.__version__}')" 2>/dev/null || echo "   ❌ pandas not found"
+    python -c "import torch; print(f'   ✅ torch {torch.__version__}')" 2>/dev/null || echo "   ❌ torch not found"
+    python -c "import stable_baselines3; print(f'   ✅ stable_baselines3 {stable_baselines3.__version__}')" 2>/dev/null || echo "   ❌ stable_baselines3 not found"
+    python -c "import pymc; print(f'   ✅ pymc {pymc.__version__}')" 2>/dev/null || echo "   ❌ pymc not found"
+    # Try juliacall last; if it fails here, runtime script will still import it first
+    python -c "import juliacall; print(f'   ✅ juliacall {juliacall.__version__}')" 2>/dev/null || echo "   ❌ juliacall not found"
+fi

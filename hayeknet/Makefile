@@ -37,14 +37,14 @@ activate:
 daily:
 	@echo "📅 Running daily research workflow..."
 	@echo ""
-	@bash -c "source activate_hayeknet.sh && python scripts/daily_research_workflow.py"
+	@bash -c "export HAYEKNET_SKIP_CHECKS=1; source activate_hayeknet.sh && python scripts/daily_research_workflow.py"
 	@echo ""
 	@echo "✅ Daily workflow complete!"
 	@echo "📖 View journal: cat research/journal/journal_$$(date +%Y-%m-%d).md"
 
 quick:
 	@echo "⚡ Running quick test (1 hour data)..."
-	@bash -c "source activate_hayeknet.sh && python scripts/daily_research_workflow.py --quick"
+	@bash -c "export HAYEKNET_SKIP_CHECKS=1; source activate_hayeknet.sh && python scripts/daily_research_workflow.py --quick"
 
 run:
 	@echo "🚀 Running HayekNet simulation..."
