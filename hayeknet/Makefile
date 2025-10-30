@@ -37,26 +37,26 @@ activate:
 daily:
 	@echo "📅 Running daily research workflow..."
 	@echo ""
-	@bash -c "export HAYEKNET_SKIP_CHECKS=1; source activate_hayeknet.sh && python scripts/daily_research_workflow.py"
+	@bash -c "export HAYEKNET_SKIP_CHECKS=1; export PYTHON_JULIACALL_HANDLE_SIGNALS=no; source activate_hayeknet.sh && python scripts/daily_research_workflow.py"
 	@echo ""
 	@echo "✅ Daily workflow complete!"
 	@echo "📖 View journal: cat research/journal/journal_$$(date +%Y-%m-%d).md"
 
 quick:
 	@echo "⚡ Running quick test (1 hour data)..."
-	@bash -c "export HAYEKNET_SKIP_CHECKS=1; source activate_hayeknet.sh && python scripts/daily_research_workflow.py --quick"
+	@bash -c "export HAYEKNET_SKIP_CHECKS=1; export PYTHON_JULIACALL_HANDLE_SIGNALS=no; source activate_hayeknet.sh && python scripts/daily_research_workflow.py --quick"
 
 run:
 	@echo "🚀 Running HayekNet simulation..."
-	@bash -c "source activate_hayeknet.sh && python -m python.main"
+	@bash -c "export PYTHON_JULIACALL_HANDLE_SIGNALS=no; source activate_hayeknet.sh && python -m python.main"
 
 run-analysis:
 	@echo "🚀 Running HayekNet with full analysis..."
-	@bash -c "source activate_hayeknet.sh && python -m python.main_with_analysis"
+	@bash -c "export PYTHON_JULIACALL_HANDLE_SIGNALS=no; source activate_hayeknet.sh && python -m python.main_with_analysis"
 
 analyze:
 	@echo "📊 Generating analysis for latest run..."
-	@bash -c "source activate_hayeknet.sh && python scripts/analyze_latest.py"
+	@bash -c "export PYTHON_JULIACALL_HANDLE_SIGNALS=no; source activate_hayeknet.sh && python scripts/analyze_latest.py"
 
 setup-automation:
 	@echo "🔧 Setting up daily 2 AM automation..."
@@ -64,7 +64,7 @@ setup-automation:
 
 jupyter:
 	@echo "📊 Starting Jupyter Lab..."
-	@bash -c "source activate_hayeknet.sh && jupyter lab --no-browser --port=8888"
+	@bash -c "export PYTHON_JULIACALL_HANDLE_SIGNALS=no; source activate_hayeknet.sh && jupyter lab --no-browser --port=8888"
 
 paper:
 	@echo "📝 Generating research manuscript..."
@@ -81,7 +81,7 @@ paper:
 
 clean-cache:
 	@echo "🗑️  Clearing old cached data (>7 days)..."
-	@bash -c "source activate_hayeknet.sh && python -c 'from python.data import ERCOTDataClient; ERCOTDataClient().clear_cache(older_than_days=7)'"
+	@bash -c "export PYTHON_JULIACALL_HANDLE_SIGNALS=no; source activate_hayeknet.sh && python -c 'from python.data import ERCOTDataClient; ERCOTDataClient().clear_cache(older_than_days=7)'"
 	@echo "✅ Cache cleaned"
 
 clean-runs:

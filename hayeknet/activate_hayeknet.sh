@@ -1,5 +1,6 @@
 #!/bin/bash
-# Activate HayekNet environment
+# Activate the hayeknet conda environment
+export PYTHON_JULIACALL_HANDLE_SIGNALS=no
 
 echo "🔧 Activating HayekNet environment..."
 

@@ -5,7 +5,7 @@ channels:
   - defaults
 dependencies:
   # Core Python
-  - python=3.13.7
+  - python=3.12.*
   - pip
   
   # Scientific Computing

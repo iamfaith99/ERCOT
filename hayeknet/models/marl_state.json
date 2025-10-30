@@ -242,6 +242,30 @@
           "timesteps": 10000,
           "total_data_points": 513864,
           "date": "2025-10-27T12:03:23.384357"
+        },
+        {
+          "resource_type": "battery",
+          "timesteps": 10000,
+          "total_data_points": 513864,
+          "date": "2025-10-28T17:17:38.241325"
+        },
+        {
+          "resource_type": "battery",
+          "timesteps": 10000,
+          "total_data_points": 513864,
+          "date": "2025-10-29T08:36:21.073325"
+        },
+        {
+          "resource_type": "battery",
+          "timesteps": 10000,
+          "total_data_points": 513864,
+          "date": "2025-10-29T11:43:14.693076"
+        },
+        {
+          "resource_type": "battery",
+          "timesteps": 10000,
+          "total_data_points": 513864,
+          "date": "2025-10-29T12:19:51.240260"
         }
       ]
     },
@@ -487,6 +511,30 @@
           "timesteps": 10000,
           "total_data_points": 513864,
           "date": "2025-10-27T12:03:27.402978"
+        },
+        {
+          "resource_type": "solar",
+          "timesteps": 10000,
+          "total_data_points": 513864,
+          "date": "2025-10-28T17:17:41.477788"
+        },
+        {
+          "resource_type": "solar",
+          "timesteps": 10000,
+          "total_data_points": 513864,
+          "date": "2025-10-29T08:36:24.277485"
+        },
+        {
+          "resource_type": "solar",
+          "timesteps": 10000,
+          "total_data_points": 513864,
+          "date": "2025-10-29T11:43:17.697995"
+        },
+        {
+          "resource_type": "solar",
+          "timesteps": 10000,
+          "total_data_points": 513864,
+          "date": "2025-10-29T12:19:54.471964"
         }
       ]
     },
@@ -732,11 +780,35 @@
           "timesteps": 10000,
           "total_data_points": 513864,
           "date": "2025-10-27T12:03:31.466283"
+        },
+        {
+          "resource_type": "wind",
+          "timesteps": 10000,
+          "total_data_points": 513864,
+          "date": "2025-10-28T17:17:44.731165"
+        },
+        {
+          "resource_type": "wind",
+          "timesteps": 10000,
+          "total_data_points": 513864,
+          "date": "2025-10-29T08:36:27.481682"
+        },
+        {
+          "resource_type": "wind",
+          "timesteps": 10000,
+          "total_data_points": 513864,
+          "date": "2025-10-29T11:43:20.763735"
+        },
+        {
+          "resource_type": "wind",
+          "timesteps": 10000,
+          "total_data_points": 513864,
+          "date": "2025-10-29T12:19:57.731085"
         }
       ]
     }
   },
   "model_dir": "/Users/weldon/Documents/My Studies/ERCOT/hayeknet/models/qse_agents",
-  "last_training_date": "2025-10-27T12:03:31.470156",
+  "last_training_date": "2025-10-30T11:08:04.281330",
   "version": "1.1"
 }

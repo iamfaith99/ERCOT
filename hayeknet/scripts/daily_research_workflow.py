@@ -23,6 +23,7 @@ import sys
 import argparse
 import time
 import os
+import atexit
 from datetime import datetime
 from pathlib import Path
 import json
@@ -30,6 +31,11 @@ import json
 # CRITICAL: Import juliacall BEFORE any torch/stable-baselines3 imports to prevent segfaults
 try:
     import juliacall
+    try:
+        atexit.unregister(juliacall.at_jl_exit)
+    except AttributeError:
+        # Older Python lacks unregister or hook absent; ignore
+        pass
 except ImportError:
     juliacall = None
 
