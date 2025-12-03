@@ -222,45 +222,43 @@ open hayeknet/research/observations/observation_$(date +%Y-%m-%d).md
 ```
 ERCOT/
 ├── hayeknet/                      # Main research system
-│   ├── python/                    # Python modules
-│   │   ├── battery_model.py      # 100MW/400MWh BESS model
-│   │   ├── battery_strategy.py   # Trading strategies
-│   │   ├── battery_daily_analysis.py  # Daily simulation
-│   │   ├── research_observations.py   # Observation tracking
-│   │   ├── data.py               # ERCOT data client
-│   │   ├── agents.py             # Bayesian + RL agents
-│   │   └── analysis.py           # Statistical analysis
+│   ├── hayeknet/                  # Python package
+│   │   ├── core/                  # Core domain models
+│   │   │   ├── battery.py        # Battery model & simulator
+│   │   │   └── market.py         # Market simulators (SCED, RTC+B)
+│   │   ├── data/                  # Data collection & processing
+│   │   ├── strategies/            # Trading strategies
+│   │   ├── ml/                    # Machine learning agents
+│   │   │   ├── qse_agents.py     # Multi-agent RL system
+│   │   │   ├── bayesian.py        # Bayesian forecasting
+│   │   │   └── rl.py             # Single-agent RL
+│   │   └── workflows/             # Automated workflows
 │   │
-│   ├── julia/                     # Julia performance kernels
-│   │   ├── enkf.jl               # Data assimilation (EnKF)
-│   │   ├── options.jl            # Option pricing (Monte Carlo)
-│   │   └── constraints.jl        # Constraint validation
+│   ├── scripts/                   # Analysis & evaluation scripts
+│   │   ├── evaluate_rtcb_comparison.py  # SCED vs RTC+B comparison
+│   │   ├── retrain_models.py           # Model retraining
+│   │   ├── analyze_historical_results.py  # Results aggregation
+│   │   └── generate_paper_visualizations.py  # Figure generation
 │   │
-│   ├── scripts/                   # Automation scripts
-│   │   ├── daily_research_workflow.py  # Main daily workflow
-│   │   ├── daily_data_collector.py     # Data collection
-│   │   └── ingest_historical_data.py   # Historical ingestion
+│   ├── docs/                      # Research paper
+│   │   ├── manuscript.qmd        # Main paper (Quarto source)
+│   │   ├── manuscript.pdf        # Publication-ready PDF ✅
+│   │   ├── references.bib        # Bibliography
+│   │   └── figures/              # Paper figures (6 figures)
 │   │
-│   ├── examples/                  # Example analyses
-│   │   ├── battery_sced_vs_rtcb.py     # Strategy comparison
-│   │   └── analyze_historical_lmps.py  # Data analysis
+│   ├── research/                  # Research outputs
+│   │   ├── rtcb_evaluation/      # Comparative analysis results
+│   │   ├── analysis/             # Statistical analysis tables
+│   │   ├── figures/              # Generated visualizations
+│   │   └── results/              # Historical simulation results
 │   │
-│   ├── docs/                      # Research documentation
-│   │   ├── Proposal.md            # Research proposal
-│   │   └── Research paper outline.md   # Paper structure
-│   │
-│   ├── data/                      # Data storage (local only)
-│   │   ├── archive/               # Historical LMP data
-│   │   └── reports/               # Downloaded reports
-│   │
-│   ├── research/                  # Research outputs (local only)
-│   │   ├── journal/               # Daily journals
-│   │   ├── observations/          # Your observations
-│   │   └── results/               # JSON results
+│   ├── models/                    # Trained ML models
+│   │   ├── qse_agents/           # MARL agents
+│   │   ├── rl/                   # Single-agent RL
+│   │   └── bayesian/             # Bayesian reasoner
 │   │
 │   ├── Makefile                   # Development commands
-│   ├── environment.yml            # Conda environment
-│   └── .gitignore                 # Protects private data
+│   └── environment.yml            # Conda environment
 │
 └── README.md                      # This file
 ```
