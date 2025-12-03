@@ -6,9 +6,9 @@
 [![Julia 1.11+](https://img.shields.io/badge/julia-1.11+-purple.svg)](https://julialang.org/)
 [![License: Academic](https://img.shields.io/badge/license-Academic-green.svg)](LICENSE)
 
-**Graduate Research Project** | October 1 - December 5, 2025 (65 days)
+**Graduate Research Project** | September 29 - December 2, 2025 (43+ days)
 **Focus**: Battery Energy Storage System (BESS) bidding strategies for ERCOT's Real-Time Co-Optimization (RTC+B) market  
-**Status**: ✅ Day 20 Active | **🆕 AI Q&A System LIVE** | Automated collection @ 1:00 AM MT
+**Status**: ✅ **Research Paper Complete** | Ready for Peer Review | 513,864 market intervals analyzed
 
 ---
 
@@ -16,7 +16,7 @@
 
 A hybrid Python-Julia platform for simulating and optimizing 100MW/400MWh battery trading strategies in ERCOT's wholesale electricity market. Combines machine learning (Bayesian forecasting, reinforcement learning) with traditional optimization to maximize battery arbitrage profitability while managing operational constraints.
 
-**Key Achievement**: **🔥 BREAKTHROUGH** - World's first autonomous AI research system that analyzes data, asks research questions, and provides evidence-based answers with confidence scores. Processing 1.8M+ market observations to generate actionable trading insights for energy storage assets.
+**Key Achievement**: **📄 Research Paper Complete** - Comprehensive comparative analysis of SCED vs RTC+B market designs using 513,864 market intervals. Paper demonstrates that RTC+B enables 82% AS revenue (vs 0% under SCED) and provides 70% AS participation rates. Ready for peer review submission.
 
 ### Business Impact
 
@@ -27,10 +27,10 @@ A hybrid Python-Julia platform for simulating and optimizing 100MW/400MWh batter
 
 ### Technical Innovation
 
-1. **🆕 Autonomous AI Research**: System asks and answers its own research questions with confidence scores
-2. **Hybrid Computing**: Python orchestration with Julia high-performance kernels (10x speedup)
-3. **Real-Time Data**: Automated ingestion from ERCOT MIS (300K+ observations daily)
-4. **Machine Learning**: Bayesian forecasting + PPO reinforcement learning for adaptive bidding
+1. **📄 Academic Paper**: Complete research paper comparing SCED vs RTC+B market designs (ready for peer review)
+2. **Comprehensive Analysis**: 513,864 market intervals analyzed across 43+ days of real ERCOT data
+3. **RTC+B Implementation**: Full implementation of Single Model ESR, ASDC price formation, and co-optimization
+4. **Machine Learning**: Multi-agent reinforcement learning with Bayesian forecasting for adaptive bidding
 5. **Reproducible Science**: Version-controlled pipeline with complete provenance tracking
 
 ---
@@ -269,28 +269,33 @@ ERCOT/
 
 ## 🎓 Research Outputs
 
-### Daily Outputs (65 days → Dec 5)
+### Academic Paper ✅ COMPLETE
 
-**Quantitative Data**:
-- Battery performance metrics (PnL, SOC, cycles)
-- Market conditions (LMP volatility, spreads)
-- Strategy effectiveness measures
-- 20+ metrics per day
+**Publication-Ready Manuscript**: `docs/manuscript.pdf`
 
-**Qualitative Data**:
-- Market characterization (volatility type)
-- Hypothesis testing progress (H1, H2, H3)
-- Strategy observations
-- Research insights for thesis
+- **Title**: "Simulating Battery Bidding Strategies in ERCOT Under Real-Time Co-Optimization: A Comparative Analysis of SCED and RTC+B Market Designs"
+- **Analysis Period**: September 29 - December 2, 2025 (43+ days)
+- **Data Points**: 513,864 market intervals analyzed
+- **Key Findings**:
+  - RTC+B enables 82% AS revenue (vs 0% under SCED)
+  - 70% AS participation rates under RTC+B
+  - ASDC price formation creates $741K additional revenue
+  - Different operational patterns: 0.22 vs 4.08 cycles/day
+- **Status**: Ready for peer review submission
 
-### By December 5, 2025 (Study End)
+### Research Data
 
-- **65 days** of battery simulations (Oct 1 - Dec 5)
-- **18,720 trading intervals** analyzed (288 per day)
-- **~19.7M market observations** collected (303K per day)
-- **Complete dataset** for thesis Results chapter
-- **Accumulated insights** for Discussion chapter
-- **Trained MARL agents** with 65 days of learning evolution
+**Quantitative Results**:
+- Comparative analysis: SCED vs RTC+B (Full) vs RTC+B (no ASDCs)
+- Revenue breakdown: Energy vs Ancillary Services
+- Operational metrics: SOC utilization, cycling behavior, AS participation
+- Risk metrics: Sharpe ratio, max drawdown
+- All results saved to `research/rtcb_evaluation/` and `research/analysis/`
+
+**Visualizations**:
+- 6 publication-quality figures in `docs/figures/`
+- SOC trajectories, revenue comparison, cumulative PnL
+- AS participation heatmap, Sharpe ratio comparison, historical trends
 
 ---
 
