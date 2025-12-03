@@ -141,10 +141,12 @@ class QSEAgent:
             latest_row = lmp_data.iloc[-1]
             
             # Extract AS prices with fallbacks
-            reg_up = latest_row.get('reg_up_price', 15.0)
-            reg_down = latest_row.get('reg_down_price', 8.0)
-            rrs = latest_row.get('rrs_price', 20.0)
-            ecrs = latest_row.get('ecrs_price', 12.0)
+            # Use column existence check first, then safely access from Series
+            # pandas Series.get() works with defaults, but checking column existence is safer
+            reg_up = latest_row['reg_up_price'] if 'reg_up_price' in lmp_data.columns else 15.0
+            reg_down = latest_row['reg_down_price'] if 'reg_down_price' in lmp_data.columns else 8.0
+            rrs = latest_row['rrs_price'] if 'rrs_price' in lmp_data.columns else 20.0
+            ecrs = latest_row['ecrs_price'] if 'ecrs_price' in lmp_data.columns else 12.0
             
             # Normalize AS prices (typical range: $5-50/MW)
             as_features = np.array([

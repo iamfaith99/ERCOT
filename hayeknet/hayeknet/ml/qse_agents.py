@@ -352,7 +352,9 @@ class MARLSystem:
                 
                 # ASDC scarcity indicator (based on load)
                 if not recent_data.empty:
-                    load = recent_data.iloc[-1].get('net_load_mw', 60000.0)
+                    latest_row = recent_data.iloc[-1]
+                    # Safely access column - check existence first
+                    load = latest_row['net_load_mw'] if 'net_load_mw' in recent_data.columns else 60000.0
                     asdc_scarcity = min(1.0, max(0.0, (load - 50000) / 20000))
                 else:
                     asdc_scarcity = 0.0
