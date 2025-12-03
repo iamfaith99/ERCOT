@@ -4,8 +4,8 @@
 import argparse
 from pathlib import Path
 
-from python.analysis import compare_runs
-from python.results import ResultsReader
+from hayeknet.analysis.metrics import compare_runs
+from hayeknet.analysis.results import ResultsReader
 
 
 def main() -> None:

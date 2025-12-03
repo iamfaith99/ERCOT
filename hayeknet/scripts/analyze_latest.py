@@ -3,8 +3,8 @@
 
 from pathlib import Path
 
-from python.analysis import ResultsAnalyzer
-from python.results import ResultsReader
+from hayeknet.analysis.metrics import ResultsAnalyzer
+from hayeknet.analysis.results import ResultsReader
 
 
 def main() -> None:

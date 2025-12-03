@@ -48,11 +48,11 @@ quick:
 
 run:
 	@echo "🚀 Running HayekNet simulation..."
-	@bash -c "export PYTHON_JULIACALL_HANDLE_SIGNALS=no; source activate_hayeknet.sh && python -m python.main"
+	@bash -c "export PYTHON_JULIACALL_HANDLE_SIGNALS=no; source activate_hayeknet.sh && python scripts/main.py"
 
 run-analysis:
 	@echo "🚀 Running HayekNet with full analysis..."
-	@bash -c "export PYTHON_JULIACALL_HANDLE_SIGNALS=no; source activate_hayeknet.sh && python -m python.main_with_analysis"
+	@bash -c "export PYTHON_JULIACALL_HANDLE_SIGNALS=no; source activate_hayeknet.sh && python scripts/main_with_analysis.py"
 
 analyze:
 	@echo "📊 Generating analysis for latest run..."
@@ -81,7 +81,7 @@ paper:
 
 clean-cache:
 	@echo "🗑️  Clearing old cached data (>7 days)..."
-	@bash -c "export PYTHON_JULIACALL_HANDLE_SIGNALS=no; source activate_hayeknet.sh && python -c 'from python.data import ERCOTDataClient; ERCOTDataClient().clear_cache(older_than_days=7)'"
+	@bash -c "export PYTHON_JULIACALL_HANDLE_SIGNALS=no; source activate_hayeknet.sh && python -c 'from hayeknet.data import ERCOTDataClient; ERCOTDataClient().clear_cache(older_than_days=7)'"
 	@echo "✅ Cache cleaned"
 
 clean-runs:

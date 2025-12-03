@@ -12,9 +12,11 @@ except ImportError:
 import numpy as np
 
 from envs.rtc_env import RTCEnv, RTCEnvConfig
-from python.agents import BayesianReasoner, RLTrainer, decide_bid
-from python.data import ERCOTDataClient, build_observation_operator
-from python.utils import init_julia, price_option, run_enkf, validate_constraints
+from hayeknet.ml.bayesian import BayesianReasoner
+from hayeknet.ml.rl import RLTrainer, decide_bid
+from hayeknet.data.client import ERCOTDataClient
+from hayeknet.data.processors import build_observation_operator
+from hayeknet.julia.utils import init_julia, price_option, run_enkf, validate_constraints
 
 
 def main() -> None:

@@ -4,8 +4,17 @@
 from pathlib import Path
 from typing import List
 
-from python.main_with_analysis import run_simulation
-from python.analysis import compare_runs
+import sys
+from pathlib import Path
+
+# Add project root to path for envs module
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+# Import from new package structure
+from hayeknet.analysis.metrics import compare_runs
+
+# Import main_with_analysis from scripts/
+from scripts.main_with_analysis import run_simulation
 
 
 def run_ensemble_size_experiment() -> List[str]:

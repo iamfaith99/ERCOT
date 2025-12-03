@@ -17,7 +17,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from python.data import ERCOTDataClient
+from hayeknet.data.client import ERCOTDataClient
 
 
 def list_available_reports(client: ERCOTDataClient, report_type: str) -> None:

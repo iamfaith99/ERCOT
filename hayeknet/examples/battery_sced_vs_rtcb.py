@@ -14,9 +14,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from python.battery_data import BatteryDataClient
-from python.battery_model import BatterySpecs
-from python.market_simulator import compare_market_designs
+from hayeknet.data.battery_client import BatteryDataClient
+from hayeknet.core.battery import BatterySpecs
+from hayeknet.core.market import compare_market_designs
 
 
 def main():

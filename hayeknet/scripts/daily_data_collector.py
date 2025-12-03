@@ -21,7 +21,7 @@ import pandas as pd
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from python.data import ERCOTDataClient
+from hayeknet.data.client import ERCOTDataClient
 
 
 def setup_directories():

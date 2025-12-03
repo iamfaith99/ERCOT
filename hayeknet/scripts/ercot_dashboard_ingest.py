@@ -13,8 +13,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from python.data import ERCOTDataClient
-from python.storage import DashboardStorage
+from hayeknet.data.client import ERCOTDataClient
+from hayeknet.data.storage import DashboardStorage
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:

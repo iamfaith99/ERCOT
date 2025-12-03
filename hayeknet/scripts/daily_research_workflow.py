@@ -45,15 +45,16 @@ import pandas as pd
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from python.data import ERCOTDataClient
-from python.battery_daily_analysis import run_battery_daily_analysis
-from python.research_observations import ResearchObservationTracker
-from python.research_analysis import run_automated_analysis
-from python.research_qa import answer_and_save_questions
-from python.qse_agents import MARLSystem, ResourceType
+from hayeknet.data.client import ERCOTDataClient
+from hayeknet.simulation.battery_analyzer import run_battery_daily_analysis
+from hayeknet.analysis.observations import ResearchObservationTracker
+from hayeknet.analysis.research import run_automated_analysis
+from hayeknet.analysis.qa import answer_and_save_questions
+from hayeknet.ml.qse_agents import MARLSystem
+from hayeknet.core.agents import ResourceType
 
 
-def should_train_agents(data_dir: Path, marl_state_file: Path) -> tuple[bool, str]:
+def should_train_agents_legacy(data_dir: Path, marl_state_file: Path) -> tuple[bool, str]:
     """Determine if agent training is needed based on market conditions.
     
     Returns:
@@ -112,27 +113,18 @@ def should_train_agents(data_dir: Path, marl_state_file: Path) -> tuple[bool, st
     return False, "Market conditions stable, training skipped to save compute time"
 
 
-def setup_directories():
-    """Ensure research directories exist."""
-    base_dir = Path(__file__).resolve().parents[1]
-    
-    dirs = {
-        'archive': base_dir / 'data' / 'archive' / 'ercot_lmp',
-        'reports': base_dir / 'data' / 'reports',
-        'logs': base_dir / 'data' / 'logs',
-        'research': base_dir / 'research',
-        'journal': base_dir / 'research' / 'journal',
-        'observations': base_dir / 'research' / 'observations',
-        'results': base_dir / 'research' / 'results'
-    }
-    
-    for dir_path in dirs.values():
-        dir_path.mkdir(parents=True, exist_ok=True)
-    
-    return dirs
+# Import workflow functions from new package structure
+from hayeknet.workflows import (
+    setup_directories,
+    fetch_daily_data,
+    run_hayeknet_system,
+    generate_research_notes,
+    create_progress_summary,
+    should_train_agents,
+)
 
 
-def fetch_daily_data(client: ERCOTDataClient, quick: bool = False, force_fresh: bool = False) -> pd.DataFrame:
+def fetch_daily_data_legacy(client: ERCOTDataClient, quick: bool = False, force_fresh: bool = False) -> pd.DataFrame:
     """Fetch latest ERCOT data.
     
     Args:
@@ -230,7 +222,7 @@ def fetch_daily_data(client: ERCOTDataClient, quick: bool = False, force_fresh: 
     return df
 
 
-def run_hayeknet_system(df: pd.DataFrame, quick: bool = False, force_train: bool = False) -> dict:
+def run_hayeknet_system_legacy(df: pd.DataFrame, quick: bool = False, force_train: bool = False) -> dict:
     """Run the full HayekNet system with all 8 components.
     
     Args:
@@ -434,7 +426,7 @@ def run_hayeknet_system(df: pd.DataFrame, quick: bool = False, force_train: bool
     return results
 
 
-def generate_research_notes(df: pd.DataFrame, results: dict, dirs: dict, battery_journal: str = "") -> str:
+def generate_research_notes_legacy(df: pd.DataFrame, results: dict, dirs: dict, battery_journal: str = "") -> str:
     """Generate daily research notes for thesis."""
     today = datetime.now()
     
@@ -602,7 +594,7 @@ def generate_research_notes(df: pd.DataFrame, results: dict, dirs: dict, battery
     return str(journal_file)
 
 
-def create_progress_summary(dirs: dict):
+def create_progress_summary_legacy(dirs: dict):
     """Create overall research progress summary."""
     journal_files = sorted(dirs['journal'].glob('journal_*.md'))
     
